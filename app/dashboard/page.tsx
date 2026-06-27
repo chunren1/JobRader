@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useCallback, useEffect } from "react";
-import { Radar, Heart, LayoutDashboard, RefreshCw, Loader2, Trash2, CheckSquare, Square, BarChart3 } from "lucide-react";
+import { Radar, Heart, LayoutDashboard, RefreshCw, Loader2, Trash2, CheckSquare, Square, BarChart3, User } from "lucide-react";
 import Link from "next/link";
 import { cn } from "@/lib/utils";
 import { useJobs, useToggleFavorite, type JobData } from "@/lib/hooks/use-jobs";
@@ -230,6 +230,13 @@ export default function Dashboard() {
 
             {/* Quick Actions */}
             <div className="mt-6 space-y-2">
+              <Link
+                href="/resume"
+                className="flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground"
+              >
+                <User className="h-4 w-4" />
+                简历分析
+              </Link>
               <button
                 onClick={refetch}
                 className="flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground"
