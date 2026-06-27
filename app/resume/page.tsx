@@ -4,6 +4,7 @@ import { useState, useEffect, useCallback } from "react";
 import Link from "next/link";
 import { Radar, ArrowLeft, Loader2, User, Briefcase, GraduationCap, Code, Star, AlertTriangle, CheckCircle2, MapPin, Mail, Phone, Calendar, ExternalLink } from "lucide-react";
 import { cn, formatSalary } from "@/lib/utils";
+import { AppSidebar } from "@/components/app-sidebar";
 
 interface ResumeData {
   name?: string; title?: string; email?: string; phone?: string; city?: string;
@@ -96,28 +97,33 @@ export default function ResumePage() {
 
   return (
     <div className="min-h-screen bg-background">
-      {/* Header */}
-      <header className="border-b sticky top-0 bg-background/95 backdrop-blur z-10">
-        <div className="max-w-7xl mx-auto px-4 lg:px-8 py-3 flex items-center justify-between">
-          <div className="flex items-center gap-4">
-            <Link href="/dashboard" className="text-muted-foreground hover:text-foreground">
-              <ArrowLeft className="h-5 w-5" />
-            </Link>
-            <Radar className="h-6 w-6 text-primary" />
-            <h1 className="text-lg font-bold">简历分析</h1>
-          </div>
-          <button onClick={handleAnalyze} disabled={analyzing}
-            className="inline-flex items-center gap-2 rounded-lg bg-primary px-4 py-2 text-sm font-medium text-primary-foreground hover:bg-primary/90 disabled:opacity-50">
-            {analyzing ? <Loader2 className="h-4 w-4 animate-spin" /> : <Star className="h-4 w-4" />}
-            重新解析
-          </button>
-        </div>
-      </header>
+      <div className="flex flex-col lg:flex-row">
+        <AppSidebar />
 
-      <div className="max-w-7xl mx-auto px-4 lg:px-8 py-6">
-        <div className="grid gap-6 lg:grid-cols-5">
-          {/* Left: Resume */}
-          <div className="lg:col-span-2 space-y-4">
+        {/* Main */}
+        <main className="flex-1 overflow-auto">
+          {/* Header */}
+          <header className="border-b sticky top-0 bg-background/95 backdrop-blur z-10">
+            <div className="px-4 lg:px-8 py-3 flex items-center justify-between">
+              <div className="flex items-center gap-4">
+                <Link href="/dashboard" className="text-muted-foreground hover:text-foreground">
+                  <ArrowLeft className="h-5 w-5" />
+                </Link>
+                <Radar className="h-6 w-6 text-primary" />
+                <h1 className="text-lg font-bold">简历分析</h1>
+              </div>
+              <button onClick={handleAnalyze} disabled={analyzing}
+                className="inline-flex items-center gap-2 rounded-lg bg-primary px-4 py-2 text-sm font-medium text-primary-foreground hover:bg-primary/90 disabled:opacity-50">
+                {analyzing ? <Loader2 className="h-4 w-4 animate-spin" /> : <Star className="h-4 w-4" />}
+                重新解析
+              </button>
+            </div>
+          </header>
+
+          <div className="px-4 lg:px-8 py-6">
+            <div className="grid gap-6 lg:grid-cols-5">
+              {/* Left: Resume */}
+              <div className="lg:col-span-2 space-y-4">
             {/* Personal */}
             <SectionCard icon={<User className="h-5 w-5" />} title="个人信息">
               <div className="space-y-2">
@@ -204,6 +210,8 @@ export default function ResumePage() {
             )}
           </div>
         </div>
+          </div>
+        </main>
       </div>
     </div>
   );
