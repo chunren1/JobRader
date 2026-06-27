@@ -224,11 +224,31 @@ chrome.runtime.onMessage.addListener(function (msg, sender, sendResponse) {
   if (msg.action === "EXTRACT_AND_SYNC") {
     (async function () {
       try {
+        // 调试信息
+        var links = document.querySelectorAll("a[href]");
+        var validLinks = [];
+        links.forEach(function(l) {
+          var h = l.href || l.getAttribute("href") || "";
+          if (h && h !== "#" && !h.startsWith("javascript") && h.length > 20) validLinks.push(h.substring(0, 80));
+        });
+        var cards = document.querySelectorAll("li, [class*='card'], [class*='item'], [class*='job']");
+        console.log("[JobRadar] Debug:", {
+          totalLinks: links.length,
+          validLinks: validLinks.length,
+          cardElements: cards.length,
+          sampleLinks: validLinks.slice(0, 3),
+          title: document.title,
+          url: window.location.href
+        });
+
         var jobs = extractJobs();
         console.log("[JobRadar] Extracted " + jobs.length + " jobs");
 
         if (jobs.length === 0) {
-          sendResponse({ success: false, error: "未检测到职位，请确认在职位列表页" });
+          sendResponse({ 
+            success: false, 
+            error: "未找到岗位（链接:" + validLinks.length + " 卡片元素:" + cards.length + "）" 
+          });
           return;
         }
 
