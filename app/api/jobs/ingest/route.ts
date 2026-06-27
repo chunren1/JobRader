@@ -1,9 +1,20 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { JobIngestBatchSchema } from "@/schemas/job-ingest";
 import { jsonArr } from "@/lib/db-helpers";
 
 export const dynamic = "force-dynamic";
+
+// CORS 预检
+export async function OPTIONS() {
+  return new NextResponse(null, {
+    status: 204,
+    headers: {
+      "Access-Control-Allow-Origin": "*",
+      "Access-Control-Allow-Methods": "GET,POST,OPTIONS",
+      "Access-Control-Allow-Headers": "Content-Type, X-Local-Secret",
+    },
+  });
+}
 
 /**
  * 岗位数据入库 API
@@ -18,16 +29,32 @@ export async function POST(request: NextRequest) {
 
   try {
     const body = await request.json();
-    const parsed = JobIngestBatchSchema.safeParse(body);
+    const rawJobs = body.jobs;
 
-    if (!parsed.success) {
-      return NextResponse.json({
-        success: false, error: "Validation failed",
-        details: parsed.error.flatten().fieldErrors,
-      }, { status: 400 });
+    if (!Array.isArray(rawJobs) || rawJobs.length === 0) {
+      return NextResponse.json({ success: false, error: "jobs array required" }, { status: 400 });
     }
 
-    const { jobs: validJobs } = parsed.data;
+    // 宽松校验：过滤掉空数据，补全缺失字段
+    const validJobs = rawJobs
+      .filter(function(j: any) { return j && j.title && j.rawUrl; })
+      .map(function(j: any) {
+        return {
+          title: String(j.title).substring(0, 255),
+          company: String(j.company || "未知").substring(0, 255),
+          salaryMin: j.salaryMin != null ? Math.abs(Number(j.salaryMin)) : null,
+          salaryMax: j.salaryMax != null ? Math.abs(Number(j.salaryMax)) : null,
+          location: String(j.location || "未知").substring(0, 100),
+          jdContent: String(j.jdContent || j.title).substring(0, 5000),
+          tags: Array.isArray(j.tags) ? j.tags.slice(0, 20) : [],
+          rawUrl: String(j.rawUrl).substring(0, 500),
+          source: String(j.source || "platform"),
+        };
+      });
+
+    if (validJobs.length === 0) {
+      return NextResponse.json({ success: false, error: "No valid jobs after filtering" }, { status: 400 });
+    }
 
     const result = await prisma.$transaction(async (tx) => {
       let ingested = 0, updated = 0;
@@ -71,7 +98,7 @@ export async function POST(request: NextRequest) {
       return { ingested, updated };
     });
 
-    return NextResponse.json({ success: true, ...result, total: validJobs.length });
+    return NextResponse.json({ success: true, ingested: result.ingested, updated: result.updated, total: validJobs.length });
   } catch (error) {
     console.error("Ingest API error:", error);
     return NextResponse.json({
