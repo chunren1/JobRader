@@ -86,17 +86,35 @@ function extractJobs() {
 
     // 用正则从文本中提取字段
     var result = parseFromText(text);
-    if (!result.title) return;
+
+    // 优先从页面级元素获取标题
+    if (!result.title || result.title.length < 4) {
+      result.title = getTitleFromPage();
+    }
+    if (!result.title) continue; // 用 continue 跳过 forEach
 
     // 如果没有公司，尝试独立提取
     if (!result.company) {
-      var lines = text.split(/[\n\r]+/).map(function(l) { return l.trim(); }).filter(function(l) { return l.length > 1 && l.length < 40; });
-      if (lines.length > 1) result.company = lines[1];
+      var companyEl = document.querySelector("[class*='company'], [class*='cname'], .name a");
+      if (companyEl) result.company = cleanText(companyEl.innerText || companyEl.textContent);
+      if (!result.company) {
+        var lines = text.split(/[\n\r]+/).map(function(l) { return l.trim(); }).filter(function(l) { return l.length > 1 && l.length < 40; });
+        if (lines.length > 1) result.company = lines[1];
+      }
     }
 
+    // 薪资也从页面级元素找
+    if (!result.saltRaw) {
+      var salPage = document.querySelector("[class*='salary'], [class*='pay'], .red, [class*='price']");
+      if (salPage) result.saltRaw = cleanText(salPage.innerText || salPage.textContent);
+    }
     var salary = parseSalary(result.saltRaw || "");
 
     var rawUrl = href.startsWith("http") ? href : "https://www.zhipin.com" + (href.startsWith("/") ? "" : "/") + href;
+
+    // jdContent 用完整文本（去掉标题等无关头）
+    var fullJD = cleanJdText(text);
+    if (fullJD.length < 50) fullJD = text.substring(0, 500);
 
     jobs.push({
       title: cleanTitle(result.title),
@@ -104,7 +122,7 @@ function extractJobs() {
       salaryMin: salary.min,
       salaryMax: salary.max,
       location: result.location || "未知",
-      jdContent: text.substring(0, 500),
+      jdContent: fullJD,
       tags: [],
       rawUrl: rawUrl,
       source: "platform"
@@ -175,6 +193,43 @@ function parseFromText(text) {
   }
 
   return result;
+}
+
+// 从页面级元素获取岗位标题
+function getTitleFromPage() {
+  var selectors = [
+    "h1", "h2",
+    "[class*='job-title']", "[class*='job-name']", "[class*='jobName']",
+    ".name h1", ".name span", "[class*='title']",
+    "head title"
+  ];
+  for (var i = 0; i < selectors.length; i++) {
+    var el = document.querySelector(selectors[i]);
+    if (el) {
+      var t = cleanText(el.innerText || el.textContent);
+      // 过滤掉纯 URL 或无意义的标题
+      if (t && t.length > 2 && t.length < 80 && !t.startsWith("http")) {
+        // 去掉末尾的薪资数字
+        t = t.replace(/\s*\d+[-~]\d+[kK].*$/, "");
+        return t;
+      }
+    }
+  }
+  // 从 URL 提取最后一段
+  var path = window.location.pathname;
+  var parts = path.replace(/\/$/, "").split("/");
+  var last = decodeURIComponent(parts[parts.length - 1] || "");
+  if (last && last.length > 2 && last.length < 60) return last;
+  return "";
+}
+
+// 清理 JD 文本，去掉 UI 干扰头
+function cleanJdText(text) {
+  return text
+    .replace(/^举报[\s\S]*?(?=职位描述|岗位职责|岗位要求|任职|工作内容|职位详情|岗位介绍)/, "")
+    .replace(/^(职位描述|岗位职责|岗位要求|任职要求|工作内容|职位详情|岗位介绍|【|岗位)/, "")
+    .trim()
+    .substring(0, 2000);
 }
 
 // ============================================
