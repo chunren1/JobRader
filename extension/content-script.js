@@ -148,7 +148,7 @@ function parseFromText(text) {
   }
 
   // 要跳过的干扰文本
-  var BLACKLIST = /^(举报|投诉|分享|收藏|关注|微信|扫码|小程序|APP|下载|打开|看准|脉脉|BOSS直聘|聊天|立即沟通|沟通|投递|简历|电话|邮箱|在线简历|附件|校招|社招|实习|全职|兼职|远程|居家|现场|办公|\d+人|规模|融资|轮$|天使轮|A轮|B轮|C轮|D轮|IPO|上市|未融资|不需要融资|职位|描述|职责|要求|任职|详情|介绍|福利|待遇|亮点)$/;
+  var BLACKLIST = /^(举报|投诉|分享|收藏|关注|微信|扫码|小程序|APP|下载|打开|看准|脉脉|BOSS直聘|聊天|立即沟通|沟通|投递|简历|电话|邮箱|在线简历|附件|校招|社招|实习|全职|兼职|远程|居家|现场|办公|\d+人|规模|融资|轮$|天使轮|A轮|B轮|C轮|D轮|IPO|上市|未融资|不需要融资|职位|描述|职责|要求|任职|详情|介绍|福利|待遇|亮点|.*刚刚活跃|.*小时前活跃|.*在线|.*日活跃)$/;
 
   var titleIdx = -1, companyIdx = -1, salIdx = -1, locIdx = -1;
 
@@ -163,12 +163,16 @@ function parseFromText(text) {
     else if (locIdx < 0 && line.match(/^(北京|上海|广州|深圳|杭州|成都|武汉|南京|西安|厦门|苏州|长沙|天津|重庆|郑州|东莞|合肥|佛山|福州|青岛|大连)(区)?$/)) {
       result.location = line; locIdx = i;
     }
-    // 标题
+    // 标题: 必须找到真正的岗位名
     else if (titleIdx < 0 && line.length > 2) {
       var skip = BLACKLIST.test(line) ||
                  line.match(/^\d/) ||
                  line.match(/年经验|本科|大专|硕士|博士|应届|在校|要求|熟练|熟悉|精通|了解|负责|参与|具有|具备/) ||
-                 line.match(/^[A-Za-z\s]+$/);
+                 line.match(/^[A-Za-z\s]+$/) ||
+                 // 中文人名特征：2-3个字+空格+状态
+                 line.match(/^[\u4e00-\u9fa5]{2,4}\s+(刚刚|小时前|\d+天前|在线|活跃|离线)/) ||
+                 // 纯中文2-4字+状态（大概率是HR名字）
+                 line.match(/^[\u4e00-\u9fa5]{2,4}$/) && lines[i+1] && lines[i+1].match(/活跃|在线/);
       if (!skip) {
         result.title = line;
         titleIdx = i;
