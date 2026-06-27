@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useCallback, useEffect } from "react";
-import { Radar, Heart, LayoutDashboard, RefreshCw, Loader2, Trash2, CheckSquare, Square } from "lucide-react";
+import { Radar, Heart, LayoutDashboard, RefreshCw, Loader2, Trash2, CheckSquare, Square, BarChart3 } from "lucide-react";
 import Link from "next/link";
 import { cn } from "@/lib/utils";
 import { useJobs, useToggleFavorite, type JobData } from "@/lib/hooks/use-jobs";
@@ -27,8 +27,7 @@ export default function Dashboard() {
   const [favoritedIds, setFavoritedIds] = useState<Set<string>>(new Set());
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [batchDeleting, setBatchDeleting] = useState(false);
-  const [showAnalytics, setShowAnalytics] = useState(false);
-  const [viewMode, setViewMode] = useState<"all" | "favorites">("all");
+  const [viewMode, setViewMode] = useState<"all" | "favorites" | "analytics">("all");
 
   // 从岗位数据中提取收藏状态
   useEffect(() => {
@@ -150,6 +149,19 @@ export default function Dashboard() {
               </button>
 
               <button
+                onClick={() => setViewMode("analytics")}
+                className={cn(
+                  "flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-colors",
+                  viewMode === "analytics"
+                    ? "bg-primary text-primary-foreground"
+                    : "text-muted-foreground hover:bg-secondary hover:text-foreground"
+                )}
+              >
+                <BarChart3 className="h-4 w-4" />
+                数据分析
+              </button>
+
+              <button
                 onClick={() => setViewMode("favorites")}
                 className={cn(
                   "flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-colors",
@@ -170,28 +182,6 @@ export default function Dashboard() {
 
             {/* Quick Actions */}
             <div className="mt-6 space-y-2">
-              <button
-                onClick={() => setShowAnalytics(!showAnalytics)}
-                className={cn(
-                  "flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-colors",
-                  showAnalytics
-                    ? "bg-secondary text-foreground"
-                    : "text-muted-foreground hover:bg-secondary hover:text-foreground"
-                )}
-              >
-                <svg
-                  className="h-4 w-4"
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  stroke="currentColor"
-                  strokeWidth="2"
-                >
-                  <path d="M3 3v18h18" />
-                  <path d="M7 16l4-8 4 4 4-6" />
-                </svg>
-                数据分析
-              </button>
-
               <button
                 onClick={refetch}
                 className="flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground"
@@ -214,12 +204,14 @@ export default function Dashboard() {
             {/* Page Header */}
             <div className="mb-6">
               <h1 className="text-2xl font-bold tracking-tight">
-                {viewMode === "favorites" ? "我的收藏" : "岗位看板"}
+                {viewMode === "favorites" && "我的收藏"}
+                {viewMode === "analytics" && "数据分析"}
+                {viewMode === "all" && "岗位看板"}
               </h1>
               <p className="mt-1 text-sm text-muted-foreground">
-                {viewMode === "favorites"
-                  ? `${favoritedIds.size} 个已收藏岗位`
-                  : `共 ${pagination.total} 个岗位待筛选`}
+                {viewMode === "favorites" && `${favoritedIds.size} 个已收藏岗位`}
+                {viewMode === "analytics" && `${pagination.total} 个岗位，${jobs.filter(j => j.aiScore !== null).length} 个已分析`}
+                {viewMode === "all" && `共 ${pagination.total} 个岗位待筛选`}
               </p>
             </div>
 
@@ -237,23 +229,33 @@ export default function Dashboard() {
             )}
 
             {/* Analytics Section */}
-            {showAnalytics && !loading && !error && (
-              <div className="mb-6 animate-fade-in">
-                <AnalyticsCharts jobs={jobs} />
+            {/* Analytics View */}
+            {viewMode === "analytics" && (
+              <div className="animate-fade-in">
+                {loading ? (
+                  <div className="flex items-center justify-center py-20">
+                    <Loader2 className="h-8 w-8 animate-spin text-primary" />
+                    <span className="ml-3 text-muted-foreground">加载数据...</span>
+                  </div>
+                ) : (
+                  <AnalyticsCharts jobs={jobs} />
+                )}
               </div>
             )}
 
-            {/* Filter Bar */}
-            <div className="mb-6">
-              <FilterBar
-                locations={availableFilters.locations}
-                activeFilters={activeFilters}
-                onFilterChange={updateFilters}
-              />
-            </div>
+            {/* Filter Bar — 分析模式不显示 */}
+            {viewMode !== "analytics" && (
+              <div className="mb-6">
+                <FilterBar
+                  locations={availableFilters.locations}
+                  activeFilters={activeFilters}
+                  onFilterChange={updateFilters}
+                />
+              </div>
+            )}
 
-            {/* Job List */}
-            {loading ? (
+            {/* Job List — 分析模式不显示 */}
+            {viewMode === "analytics" ? null : loading ? (
               <div className="flex items-center justify-center py-20">
                 <Loader2 className="h-8 w-8 animate-spin text-primary" />
                 <span className="ml-3 text-muted-foreground">加载岗位数据...</span>
