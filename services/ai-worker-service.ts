@@ -1,6 +1,7 @@
 import crypto from "crypto";
 import { prisma } from "@/lib/prisma";
 import { analyzeJob } from "./ai-job-analyzer";
+import { jsonArr, jsonObj } from "@/lib/db-helpers";
 import type { AiAnalysisTask, Job } from "@prisma/client";
 
 const BATCH_SIZE = 5;
@@ -102,27 +103,27 @@ async function processSingleTask(
         aiScore: result.score,
         aiSummary: result.summary,
         aiRecommendation: result.recommendation,
-        aiTechMatch: result.techStackMatch,
-        aiRedFlags: result.redFlags,
+        aiTechMatch: jsonArr(result.techStackMatch),
+        aiRedFlags: jsonArr(result.redFlags),
         aiSalaryMatch: result.salaryMatch,
-        aiDimensions: result.dimensions as object,
+        aiDimensions: jsonObj(result.dimensions as Record<string, unknown>),
       },
     });
 
     console.log(`🧠 AI analyzed: ${job.title} (score: ${result.score})`);
   }
 
-  // 2. 更新 Job 主表 AI 字段
+  // 2. 更新 Job 主表 AI 字段 (SQLite: 数组/对象序列化为 JSON 字符串)
   await prisma.job.update({
     where: { id: job.id },
     data: {
       aiScore: analysisResult.score,
       aiSummary: analysisResult.summary,
       aiRecommendation: analysisResult.recommendation,
-      aiTechMatch: analysisResult.techStackMatch,
-      aiRedFlags: analysisResult.redFlags,
+      aiTechMatch: jsonArr(analysisResult.techStackMatch),
+      aiRedFlags: jsonArr(analysisResult.redFlags),
       aiSalaryMatch: analysisResult.salaryMatch,
-      aiDimensions: analysisResult.dimensions as object,
+      aiDimensions: jsonObj(analysisResult.dimensions as Record<string, unknown>),
       analyzedAt: new Date(),
     },
   });

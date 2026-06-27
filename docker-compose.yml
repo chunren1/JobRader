@@ -1,0 +1,24 @@
+version: "3.8"
+
+services:
+  # PostgreSQL 数据库
+  postgres:
+    image: postgres:16-alpine
+    container_name: jobradar-db
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: jobradar
+      POSTGRES_PASSWORD: jobradar123
+      POSTGRES_DB: jobradar
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U jobradar"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+
+volumes:
+  postgres_data:
