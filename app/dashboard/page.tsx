@@ -264,7 +264,17 @@ export default function Dashboard() {
 
             {/* Info */}
             <div className="mt-4 rounded-lg bg-muted/50 p-3 text-[11px] leading-relaxed text-muted-foreground">
-              上传简历后，AI 将基于真实简历深度匹配岗位
+              {resumeText ? (
+                <div>
+                  <div className="font-medium text-foreground mb-1">简历已加载 ({resumeText.length}字)</div>
+                  <details>
+                    <summary className="cursor-pointer hover:text-foreground">预览简历内容</summary>
+                    <pre className="mt-2 whitespace-pre-wrap break-all max-h-40 overflow-y-auto text-[10px]">{resumeText.substring(0, 500)}{resumeText.length > 500 ? "..." : ""}</pre>
+                  </details>
+                </div>
+              ) : (
+                "上传简历后，AI 将基于真实简历深度匹配岗位"
+              )}
             </div>
           </div>
         </aside>
