@@ -1,123 +1,102 @@
 import { JobAnalysisSchema, type JobAnalysisResult } from "@/schemas/job-analysis";
 
-/**
- * AI 评分 System Prompt 模板
- * 
- * 用户画像通过参数注入，避免敏感信息硬编码
- */
-function buildSystemPrompt(userProfile: {
-  resumeSummary: string;
-  preferences: string;
-  expectedSalary: string;
-}): string {
-  return `你是一位资深的职业规划顾问和招聘专家。你的任务是分析职位描述(JD)，并根据用户背景给出客观的量化评分。
+function truncateJD(jdContent: string, maxChars = 3000): string {
+  if (jdContent.length <= maxChars) return jdContent;
+  return jdContent.substring(0, maxChars) + "...(已截断)";
+}
 
-## 用户背景
-- 经验：${userProfile.resumeSummary}
-- 偏好：${userProfile.preferences}
-- 期望薪资范围：${userProfile.expectedSalary}
+function buildSystemPrompt(resumeText: string, expectedSalary: string): string {
+  return `你是顶级猎头公司的职业匹配分析师。你需要深度对比求职者简历和目标岗位JD，输出结构化的匹配分析报告。
 
-## 评分标准
-1. 技术匹配度 (tech): 用户技能与JD要求的技术栈重合度
-2. 薪资竞争力 (salary): JD薪资与用户预期的对比
-3. 公司稳定性 (stability): 根据公司规模、行业地位、招聘文案质量判断
-4. 成长空间 (growth): 岗位对职业发展的价值
+## 求职者简历
+${resumeText || "未上传简历"}
 
-## 红旗规则
-- 出现"外包"、"驻场"、"派遣"字样 -> 标记外包风险
-- 出现"996"、"大小周"、"弹性工作" -> 标记加班风险
-- 出现"抗压"、"高强度" -> 标记压力风险
-- 公司规模小/创业公司 -> 标记稳定性风险
-- 薪资明显低于用户预期 -> 标记薪资风险
-- 要求非核心技能过多 -> 标记技能不匹配
+## 期望薪资
+${expectedSalary || "未设置"}
+
+## 分析要求
+
+### 1. 技能匹配分析 (techMatch)
+- 逐条列出JD要求的关键技能
+- 逐一对比简历中是否有对应技能
+- 标注每项技能的水平：精通/熟练/了解/缺失
+- 给出技能匹配矩阵
+
+### 2. 经验契合点 (experienceFit)
+- JD要求的项目经验 vs 简历中相关项目
+- 行业领域匹配度（如有）
+- 技术栈重合分析
+- 职级匹配度
+
+### 3. 能力差距 (gaps)  
+- 明确列出缺失的关键技能
+- 经验年限缺口
+- 学历/证书要求差距
+
+### 4. 风险提示 (redFlags)
+- 频繁跳槽
+- 技术栈过时
+- 行业不匹配
+- 外包/驻场等不良信号
+- 薪资倒挂风险
+
+### 5. 综合建议 (recommendation)
+- 基于上述分析给出：强烈推荐/可以考虑/不推荐
+- 一句话总结
+- 如果推荐，说明核心优势
+- 如果不推荐，说明关键原因
 
 ## Few-Shot 示例
 
-### 示例1: 好岗位
-JD: "字节跳动招聘高级前端工程师，负责抖音电商核心业务，要求React/TypeScript/Next.js，薪资40-65K·16薪"
-输出: { score: 92, salaryMatch: "高于预期", techStackMatch: ["React","TypeScript","Next.js"], redFlags: ["工作强度可能较大"], summary: "顶级大厂核心业务，技术栈高度匹配", recommendation: "强烈推荐", dimensions: { tech: 95, salary: 95, stability: 85, growth: 90 } }
+JD: "字节跳动高级前端，React/TS/Next.js，5年经验，40-65K"
+简历: "5年React+TS经验，主导过大型B端项目，熟悉Next.js SSR，Node.js中间层开发"
+输出:
+{"score":92,"salaryMatch":"符合预期","techStackMatch":["React","TypeScript","Next.js","Node.js"],"redFlags":["工作强度可能较大"],"summary":"技术栈高度匹配，项目经验对口，唯一风险是大厂工作强度","recommendation":"强烈推荐","dimensions":{"tech":95,"salary":88,"stability":85,"growth":90},"skillMatrix":[{"skill":"React","level":"精通","match":true},{"skill":"TypeScript","level":"精通","match":true},{"skill":"Next.js","level":"熟练","match":true}],"experienceFit":["有大型B端项目经验","SSR实战经验丰富"],"gaps":["无重大能力差距"]}
 
-### 示例2: 差岗位
-JD: "急招Java开发驻场百度，要求接受996和长期出差，薪资15-20K"
-输出: { score: 20, salaryMatch: "低于预期", techStackMatch: [], redFlags: ["驻场岗位","996加班","薪资偏低"], summary: "外包驻场岗，薪资低且加班严重", recommendation: "不推荐", dimensions: { tech: 10, salary: 15, stability: 20, growth: 10 } }
-
-## 输出要求
-你只能输出一行纯 JSON，不要有任何解释、markdown 标记或额外文字。格式如下：
-{"score": 85, "salaryMatch": "符合预期", "techStackMatch": ["React"], "redFlags": [], "summary": "一句话总结", "recommendation": "强烈推荐", "dimensions": {"tech": 85, "salary": 80, "stability": 70, "growth": 90}}`;
+## 输出格式
+只输出纯JSON，不要markdown标记或额外文字。` + "\n\n" + JSON.stringify({
+  score: 85, salaryMatch: "符合预期",
+  techStackMatch: ["技能1"], redFlags: ["风险1"],
+  summary: "一句话亮点总结", recommendation: "可以考虑",
+  dimensions: { tech: 85, salary: 80, stability: 70, growth: 85 },
+  skillMatrix: [{ skill: "技能", level: "精通", match: true }],
+  experienceFit: ["经验匹配点"], gaps: ["能力差距点"]
+}, null, 2);
 }
 
-/**
- * 智能截断 JD 内容，保留关键信息
- * 策略：优先保留开头描述和要求部分，中间大段描述适当截断
- */
-function truncateJD(jdContent: string, maxChars: number = 3000): string {
-  if (jdContent.length <= maxChars) return jdContent;
-
-  const sections = jdContent.split(/\n\n|\r\n\r\n/);
-  if (sections.length <= 1) {
-    return jdContent.substring(0, maxChars) + "...(内容已截断)";
-  }
-
-  // 保留第一段和最后一段（通常包含职位描述和要求）
-  const first = sections[0];
-  const last = sections[sections.length - 1];
-  const middleMax = maxChars - first.length - last.length - 50;
-
-  if (middleMax > 0) {
-    const middle = sections
-      .slice(1, -1)
-      .join("\n\n")
-      .substring(0, middleMax);
-    return `${first}\n\n${middle}\n\n...(中间部分已截断)\n\n${last}`;
-  }
-
-  return jdContent.substring(0, maxChars) + "...(内容已截断)";
+function truncateResume(text: string): string {
+  if (text.length <= 2000) return text;
+  return text.substring(0, 2000) + "...(已截断)";
 }
 
-/**
- * AI 岗位分析服务
- * 
- * @param jdContent - 岗位描述原文
- * @param userProfile - 用户简历/偏好摘要
- * @returns 结构化分析结果，失败返回 null
- */
 export async function analyzeJob(
   jdContent: string,
-  userProfile: {
-    resumeSummary: string;
-    preferences: string;
-    expectedSalary: string;
-  }
+  userProfile: { resumeSummary: string; preferences: string; expectedSalary: string },
+  resumeText?: string
 ): Promise<JobAnalysisResult | null> {
   const apiKey = process.env.OPENAI_API_KEY;
-  if (!apiKey) {
-    console.warn("⚠️ OPENAI_API_KEY not configured, skipping AI analysis");
-    return null;
-  }
+  if (!apiKey) { console.warn("No API key configured"); return null; }
 
   const model = process.env.OPENAI_MODEL || "deepseek-ai/DeepSeek-V4-Flash";
   const baseUrl = process.env.AI_BASE_URL || "https://api.siliconflow.cn/v1";
   const truncatedJD = truncateJD(jdContent);
 
+  // 优先用上传的简历，否则用环境变量里的摘要
+  const resumeForPrompt = resumeText
+    ? truncateResume(resumeText)
+    : `【用户简况】${userProfile.resumeSummary}；偏好：${userProfile.preferences}`;
+
   try {
     const response = await fetch(`${baseUrl}/chat/completions`, {
       method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${apiKey}`,
-      },
+      headers: { "Content-Type": "application/json", Authorization: `Bearer ${apiKey}` },
       body: JSON.stringify({
         model,
         messages: [
-          { role: "system", content: buildSystemPrompt(userProfile) },
-          {
-            role: "user",
-            content: `请分析以下职位描述：\n\n${truncatedJD}`,
-          },
+          { role: "system", content: buildSystemPrompt(resumeForPrompt, userProfile.expectedSalary) },
+          { role: "user", content: `请分析以下职位：\n\n${truncatedJD}` },
         ],
-        temperature: 0.3,
-        max_tokens: 1000,
-        // SiliconFlow DeepSeek 不支持 json_object，用 prompt 约束输出来替代
+        temperature: 0.3, max_tokens: 2000,
       }),
     });
 
@@ -129,37 +108,21 @@ export async function analyzeJob(
 
     const data = await response.json();
     const content = data.choices?.[0]?.message?.content;
+    if (!content) { console.error("Empty AI response"); return null; }
 
-    if (!content) {
-      console.error("AI returned empty response");
-      return null;
-    }
-
-    // 解析 JSON 输出
-    let parsed: unknown;
-    try {
-      parsed = JSON.parse(content);
-    } catch {
-      console.error("AI returned invalid JSON, attempting repair...");
-      // 尝试从文本中提取 JSON
+    let parsed;
+    try { parsed = JSON.parse(content); }
+    catch {
       const jsonMatch = content.match(/\{[\s\S]*\}/);
       if (jsonMatch) {
-        try {
-          parsed = JSON.parse(jsonMatch[0]);
-        } catch {
-          console.error("Failed to repair JSON");
-          return null;
-        }
-      } else {
-        return null;
-      }
+        try { parsed = JSON.parse(jsonMatch[0]); }
+        catch { console.error("Failed to repair JSON"); return null; }
+      } else { return null; }
     }
 
-    // 使用 Zod 校验结构化输出
     const validated = JobAnalysisSchema.safeParse(parsed);
     if (!validated.success) {
-      console.error("AI Zod validation failed:", JSON.stringify(validated.error.flatten().fieldErrors));
-      console.error("Raw AI output:", content.substring(0, 300));
+      console.error("Zod validation failed:", JSON.stringify(validated.error.flatten().fieldErrors));
       return null;
     }
 

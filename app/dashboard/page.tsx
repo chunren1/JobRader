@@ -28,6 +28,38 @@ export default function Dashboard() {
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [batchDeleting, setBatchDeleting] = useState(false);
   const [viewMode, setViewMode] = useState<"all" | "favorites" | "analytics">("all");
+  const [resumeText, setResumeText] = useState<string | null>(null);
+  const [resumeUploading, setResumeUploading] = useState(false);
+
+  // 加载简历
+  useEffect(() => {
+    fetch("/api/resume").then(r => r.json()).then(d => {
+      if (d.success) setResumeText(d.data.text);
+    }).catch(() => {});
+  }, []);
+
+  // 上传简历
+  const handleResumeUpload = useCallback(async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setResumeUploading(true);
+    try {
+      const fd = new FormData();
+      fd.append("file", file);
+      const res = await fetch("/api/resume", { method: "POST", body: fd });
+      const data = await res.json();
+      if (data.success) setResumeText(data.data.text);
+      else alert("上传失败: " + (data.error || ""));
+    } finally {
+      setResumeUploading(false);
+    }
+  }, []);
+
+  // 清除简历
+  const handleClearResume = useCallback(async () => {
+    await fetch("/api/resume", { method: "DELETE" }).catch(() => {});
+    setResumeText(null);
+  }, []);
 
   // 从岗位数据中提取收藏状态
   useEffect(() => {
@@ -191,9 +223,23 @@ export default function Dashboard() {
               </button>
             </div>
 
+            {/* Resume Upload */}
+            <div className="mt-6 space-y-2">
+              <label className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-sm font-medium text-muted-foreground cursor-pointer hover:bg-secondary hover:text-foreground transition-colors">
+                <svg className="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                  <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/>
+                </svg>
+                {resumeText ? "简历已上传 ✓" : "上传简历 (PDF)"}
+                <input type="file" accept=".pdf" onChange={handleResumeUpload} className="hidden" />
+              </label>
+              {resumeText && (
+                <button onClick={handleClearResume} className="w-full text-left rounded-lg px-3 py-1.5 text-xs text-red-400 hover:bg-red-50 hover:text-red-600 transition-colors">清除简历</button>
+              )}
+            </div>
+
             {/* Info */}
-            <div className="mt-6 rounded-lg bg-muted/50 p-3 text-[11px] leading-relaxed text-muted-foreground">
-              通过 Chrome 插件提取岗位，AI 自动分析评分，助你高效决策
+            <div className="mt-4 rounded-lg bg-muted/50 p-3 text-[11px] leading-relaxed text-muted-foreground">
+              上传简历后，AI 将基于真实简历深度匹配岗位
             </div>
           </div>
         </aside>

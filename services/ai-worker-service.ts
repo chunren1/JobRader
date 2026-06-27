@@ -60,6 +60,10 @@ async function processSingleTask(
   const userProfile = getUserProfile();
   const jdHash = hashText(job.jdContent);
 
+  // 读取简历
+  const resume = await prisma.resume.findFirst({ orderBy: { createdAt: "desc" } });
+  const resumeText = resume?.rawText || undefined;
+
   // 1. 尝试命中缓存
   const cachedResult = await prisma.aiAnalysisCache.findUnique({
     where: { jdHash },
@@ -89,7 +93,7 @@ async function processSingleTask(
     console.log(`♻️ Cache hit: ${job.title} (hits: ${cachedResult.hitCount + 1})`);
   } else {
     // ❌ 未命中缓存：调用 AI
-    const result = await analyzeJob(job.jdContent, userProfile);
+    const result = await analyzeJob(job.jdContent, userProfile, resumeText);
     if (!result) {
       throw new Error("AI analysis failed — returned null");
     }
