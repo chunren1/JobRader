@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useCallback, useEffect } from "react";
-import { Radar, Heart, LayoutDashboard, RefreshCw, Loader2 } from "lucide-react";
+import { Radar, Heart, LayoutDashboard, RefreshCw, Loader2, Trash2, CheckSquare, Square } from "lucide-react";
 import Link from "next/link";
 import { cn } from "@/lib/utils";
 import { useJobs, useToggleFavorite, type JobData } from "@/lib/hooks/use-jobs";
@@ -25,6 +25,8 @@ export default function Dashboard() {
 
   const { toggle } = useToggleFavorite();
   const [favoritedIds, setFavoritedIds] = useState<Set<string>>(new Set());
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [batchDeleting, setBatchDeleting] = useState(false);
   const [showAnalytics, setShowAnalytics] = useState(false);
   const [viewMode, setViewMode] = useState<"all" | "favorites">("all");
 
@@ -72,6 +74,38 @@ export default function Dashboard() {
     },
     [refetch]
   );
+
+  const toggleSelect = useCallback((jobId: string) => {
+    setSelectedIds(prev => {
+      const n = new Set(prev);
+      n.has(jobId) ? n.delete(jobId) : n.add(jobId);
+      return n;
+    });
+  }, []);
+
+  const selectAll = useCallback(() => {
+    setSelectedIds(new Set(displayJobs.map(j => j.id)));
+  }, []); // eslint-disable-line
+
+  const clearSelection = useCallback(() => setSelectedIds(new Set()), []);
+
+  const handleBatchDelete = useCallback(async () => {
+    if (selectedIds.size === 0) return;
+    if (!confirm(`确定删除选中的 ${selectedIds.size} 个岗位吗？此操作不可撤销。`)) return;
+    setBatchDeleting(true);
+    try {
+      const ids = Array.from(selectedIds);
+      await fetch("/api/jobs", {
+        method: "DELETE",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ ids }),
+      });
+      setSelectedIds(new Set());
+      refetch();
+    } finally {
+      setBatchDeleting(false);
+    }
+  }, [selectedIds, refetch]);
 
   const handleTagClick = useCallback(
     (tag: string) => {
@@ -256,12 +290,44 @@ export default function Dashboard() {
               </div>
             ) : (
               <>
+                {/* Batch Toolbar */}
+                <div className="flex items-center gap-3 mb-3">
+                  <button
+                    onClick={selectedIds.size === displayJobs.length ? clearSelection : selectAll}
+                    className="inline-flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground transition-colors"
+                  >
+                    {selectedIds.size === displayJobs.length && displayJobs.length > 0
+                      ? <CheckSquare className="h-4 w-4 text-primary" />
+                      : <Square className="h-4 w-4" />}
+                    全选 {displayJobs.length} 项
+                  </button>
+                  {selectedIds.size > 0 && (
+                    <span className="text-xs text-muted-foreground">
+                      已选 {selectedIds.size} 项
+                    </span>
+                  )}
+                  {selectedIds.size > 0 && (
+                    <button
+                      onClick={handleBatchDelete}
+                      disabled={batchDeleting}
+                      className="inline-flex items-center gap-1.5 rounded-lg bg-red-500 px-3 py-1.5 text-xs font-medium text-white hover:bg-red-600 transition-colors disabled:opacity-50"
+                    >
+                      {batchDeleting
+                        ? <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                        : <Trash2 className="h-3.5 w-3.5" />}
+                      删除选中
+                    </button>
+                  )}
+                </div>
+
                 {/* Job Cards Grid */}
                 <div className="grid gap-4">
                   {displayJobs.map((job) => (
                     <JobCard
                       key={job.id}
                       job={job}
+                      isSelected={selectedIds.has(job.id)}
+                      onToggleSelect={() => toggleSelect(job.id)}
                       onToggleFavorite={handleToggleFavorite}
                       onDelete={handleDelete}
                       onTagClick={handleTagClick}

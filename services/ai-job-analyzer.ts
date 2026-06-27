@@ -42,7 +42,8 @@ JD: "急招Java开发驻场百度，要求接受996和长期出差，薪资15-20
 输出: { score: 20, salaryMatch: "低于预期", techStackMatch: [], redFlags: ["驻场岗位","996加班","薪资偏低"], summary: "外包驻场岗，薪资低且加班严重", recommendation: "不推荐", dimensions: { tech: 10, salary: 15, stability: 20, growth: 10 } }
 
 ## 输出要求
-必须返回严格符合以下 JSON Schema 格式的结果，不要添加任何其他文字。`;
+你只能输出一行纯 JSON，不要有任何解释、markdown 标记或额外文字。格式如下：
+{"score": 85, "salaryMatch": "符合预期", "techStackMatch": ["React"], "redFlags": [], "summary": "一句话总结", "recommendation": "强烈推荐", "dimensions": {"tech": 85, "salary": 80, "stability": 70, "growth": 90}}`;
 }
 
 /**
@@ -116,12 +117,13 @@ export async function analyzeJob(
         ],
         temperature: 0.3,
         max_tokens: 1000,
-        response_format: { type: "json_object" },
+        // SiliconFlow DeepSeek 不支持 json_object，用 prompt 约束输出来替代
       }),
     });
 
     if (!response.ok) {
-      console.error(`AI API error: ${response.status} ${response.statusText}`);
+      const errBody = await response.text().catch(() => "");
+      console.error(`AI API error ${response.status}: ${errBody.substring(0, 200)}`);
       return null;
     }
 
@@ -156,10 +158,8 @@ export async function analyzeJob(
     // 使用 Zod 校验结构化输出
     const validated = JobAnalysisSchema.safeParse(parsed);
     if (!validated.success) {
-      console.error(
-        "AI output failed Zod validation:",
-        validated.error.flatten().fieldErrors
-      );
+      console.error("AI Zod validation failed:", JSON.stringify(validated.error.flatten().fieldErrors));
+      console.error("Raw AI output:", content.substring(0, 300));
       return null;
     }
 

@@ -12,6 +12,8 @@ import {
   Tag,
   Loader2,
   Trash2,
+  CheckSquare,
+  Square,
 } from "lucide-react";
 import { cn, formatSalary, formatTimeAgo } from "@/lib/utils";
 import { ScoreBadge, RecommendationBadge, SalaryMatchBadge } from "./status-badge";
@@ -24,6 +26,8 @@ interface JobCardProps {
   onDelete: (jobId: string) => Promise<void>;
   onTagClick?: (tag: string) => void;
   isFavorited: boolean;
+  isSelected?: boolean;
+  onToggleSelect?: () => void;
 }
 
 export function JobCard({
@@ -32,6 +36,8 @@ export function JobCard({
   onDelete,
   onTagClick,
   isFavorited,
+  isSelected = false,
+  onToggleSelect,
 }: JobCardProps) {
   const [expanded, setExpanded] = useState(false);
   const [favoriteLoading, setFavoriteLoading] = useState(false);
@@ -82,10 +88,25 @@ export function JobCard({
   );
 
   return (
-    <div className="rounded-xl border bg-card shadow-sm transition-all hover:shadow-md hover:border-primary/30">
+    <div className={cn(
+      "rounded-xl border bg-card shadow-sm transition-all hover:shadow-md",
+      isSelected && "border-primary ring-1 ring-primary"
+    )}>
       <div className="p-5">
-        {/* Header: Title + Score + Favorite — 点击标题跳转到岗位页面 */}
-        <div className="mb-3 flex items-start justify-between gap-3">
+        {/* Checkbox + Header */}
+        <div className="mb-3 flex items-start gap-3">
+          {onToggleSelect && (
+            <button
+              onClick={(e) => { e.stopPropagation(); onToggleSelect(); }}
+              className="mt-0.5 flex-shrink-0 text-muted-foreground hover:text-primary transition-colors"
+              aria-label={isSelected ? "取消选择" : "选择"}
+            >
+              {isSelected
+                ? <CheckSquare className="h-5 w-5 text-primary" />
+                : <Square className="h-5 w-5" />}
+            </button>
+          )}
+          <div className="flex-1 min-w-0 flex items-start justify-between gap-3">
           <div
             className="min-w-0 flex-1 cursor-pointer group"
             onClick={handleOpenJob}
@@ -138,6 +159,7 @@ export function JobCard({
               )}
             </button>
           </div>
+        </div>
         </div>
 
         {/* Meta: Salary + Location + Time */}
