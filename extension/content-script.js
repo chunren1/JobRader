@@ -189,22 +189,68 @@ function extractFromListPage() {
 
       if (!title) return;
 
-      // 公司
-      var companyEl = card.querySelector(".company-name, .company-text, [class*='company-name'], .cname, .company-info");
-      var company = companyEl ? cleanText(companyEl.innerText || companyEl.textContent) : "未知";
+      // 卡片完整文本（用于兜底提取公司/地点/薪资）
+      var fullText = cleanText(card.innerText || card.textContent);
 
-      // 薪资
+      // 薪资：从卡片文本提取
       var salEl = card.querySelector(".salary, .red, [class*='salary'], [class*='pay']");
       var salText = salEl ? cleanText(salEl.innerText || salEl.textContent) : "";
       var salary = parseSalary(salText);
+      // 兜底：从完整文本中搜薪资
+      if (salary.min == null && salary.max == null) {
+        var salMatch = fullText.match(/(\d+)[-~](\d+)\s*元\/天/);
+        if (salMatch) {
+          salary = { min: parseInt(salMatch[1]) * 22, max: parseInt(salMatch[2]) * 22 };
+        } else {
+          salMatch = fullText.match(/(\d+)[kK][-~](\d+)[kK]/);
+          if (salMatch) salary = { min: parseInt(salMatch[1]) * 1000, max: parseInt(salMatch[2]) * 1000 };
+        }
+      }
 
-      // 地点
-      var locEl = card.querySelector(".job-area, .area, [class*='area']");
+      // 公司：从完整文本中提取 "公司名 城市·区域" 模式
+      var company = "未知";
       var location = "未知";
-      if (locEl) {
-        var locText = cleanText(locEl.innerText || locEl.textContent);
-        var cm = locText.match(/北京|上海|广州|深圳|杭州|成都|武汉|南京|西安|厦门|苏州|长沙|天津|重庆|郑州|东莞|合肥|佛山|福州|青岛|大连/);
-        if (cm) location = cm[0];
+
+      // 常见公司提取模式：标签末尾 + 公司名 + 城市
+      var cityDistrictPattern = /(北京|上海|广州|深圳|杭州|成都|武汉|南京|西安|厦门|苏州|长沙|天津|重庆|郑州|东莞|合肥|佛山|福州|青岛|大连)·[^\s]{2,6}/;
+      var cdMatch = fullText.match(cityDistrictPattern);
+      if (cdMatch) {
+        location = cdMatch[0];
+        // 公司名在城市前面
+        var beforeCity = fullText.substring(0, fullText.indexOf(location));
+        var parts = beforeCity.match(/[\u4e00-\u9fa5a-zA-Z]{2,20}(?:科技|软件|信息|网络|数据|科技|技术|集团|有限公司|公司)/g);
+        if (parts && parts.length > 0) {
+          company = parts[parts.length - 1];
+        } else {
+          // 取城市前的最后一个词作为公司
+          var words = beforeCity.trim().split(/\s+/);
+          if (words.length > 0) {
+            var last = words[words.length - 1];
+            if (last.length >= 2 && last.length <= 20 && !last.match(/Java|Python|Go|本科|硕士|应届/)) {
+              company = last;
+            }
+          }
+        }
+      }
+
+      // 如果公司还是未知，尝试从 class 选择器
+      if (company === "未知") {
+        var companyEl = card.querySelector(".company-name, .company-text, [class*='company-name'], .cname, .company-info");
+        if (companyEl) company = cleanText(companyEl.innerText || companyEl.textContent);
+      }
+
+      // 地点兜底
+      if (location === "未知") {
+        var locEl = card.querySelector(".job-area, .area, [class*='area']");
+        if (locEl) {
+          var locText = cleanText(locEl.innerText || locEl.textContent);
+          var cm = locText.match(/北京|上海|广州|深圳|杭州|成都|武汉|南京|西安|厦门|苏州|长沙|天津|重庆|郑州|东莞|合肥|佛山|福州|青岛|大连/);
+          if (cm) location = cm[0];
+        }
+      }
+      if (location === "未知") {
+        var cm2 = fullText.match(/北京|上海|广州|深圳|杭州|成都|武汉|南京|西安|厦门|苏州|长沙|天津|重庆|郑州|东莞|合肥|佛山|福州|青岛|大连/);
+        if (cm2) location = cm2[0];
       }
 
       // 标签
