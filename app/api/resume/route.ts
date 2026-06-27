@@ -40,11 +40,35 @@ export async function POST(request: NextRequest) {
       const data = await pdfParse(buffer);
       rawText = data.text;
     } catch (e: any) {
-      console.error("PDF parse failed:", e?.message || e);
-      // 图片扫描型 PDF 无法提取文字
+      console.error("PDF parse failed, trying OCR...", e?.message || e);
+    }
+
+    // 文字提取失败，尝试 OCR
+    if (!rawText || rawText.trim().length < 50) {
+      try {
+        const buffer = Buffer.from(await file.arrayBuffer());
+        const pdf2img = await import("pdf-to-img");
+        const Tesseract = (await import("tesseract.js")).default;
+        // 只 OCR 前 3 页（省时间）
+        let ocrText = "";
+        let pageCount = 0;
+        const doc = await pdf2img.pdf(buffer);
+        for await (const page of doc) {
+          if (pageCount >= 3) break;
+          const result = await Tesseract.recognize(page, "chi_sim+eng");
+          ocrText += result.data.text + "\n";
+          pageCount++;
+        }
+        if (ocrText.trim().length > 50) rawText = ocrText.trim();
+      } catch (ocrErr: any) {
+        console.error("OCR also failed:", ocrErr?.message || ocrErr);
+      }
+    }
+
+    if (!rawText || rawText.trim().length < 50) {
       return NextResponse.json({
         success: false,
-        error: "PDF解析失败。如为扫描件/图片PDF，请转换后重试。或直接粘贴简历内容。"
+        error: "PDF无法提取文字。请确认PDF为文字版或用Word导出。" + (rawText ? "(" + rawText.length + "字符)" : "")
       }, { status: 400 });
     }
 
