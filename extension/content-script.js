@@ -117,33 +117,63 @@ function extractJobs() {
 // 从文本块提取字段
 function parseFromText(text) {
   var result = { title: "", location: "", saltRaw: "" };
-  var lines = text.split(/[\n\r]+/).map(function(l) { return l.trim(); }).filter(function(l) { return l.length > 1; });
+  // 按换行拆分，合并过短的行
+  var rawLines = text.split(/[\n\r]+/).map(function(l) { return l.trim(); }).filter(function(l) { return l.length > 0; });
+
+  // 把过短行（<4字符）合并到相邻行
+  var lines = [];
+  for (var i = 0; i < rawLines.length; i++) {
+    var l = rawLines[i];
+    if (l.length < 4 && lines.length > 0) {
+      lines[lines.length - 1] += " " + l;
+    } else {
+      lines.push(l);
+    }
+  }
+
+  // 识别哪些是标题、薪资、城市、公司
+  var titleIdx = -1, companyIdx = -1, salIdx = -1, locIdx = -1;
 
   for (var i = 0; i < lines.length; i++) {
     var line = lines[i];
 
-    // 薪资行
-    if (!result.saltRaw && line.match(/\d+[kK万萬]/) && line.length < 30) {
+    // 薪资: 含数字+K/万
+    if (salIdx < 0 && line.match(/\d+[kK万萬]/) && line.length < 25) {
       result.saltRaw = line;
+      salIdx = i;
     }
-    // 城市行
-    else if (!result.location && line.match(/^(北京|上海|广州|深圳|杭州|成都|武汉|南京|西安|厦门|苏州|长沙|天津|重庆|郑州|东莞|合肥|佛山|福州|青岛|大连)$/)) {
+    // 城市: 单行纯城市名
+    else if (locIdx < 0 && line.match(/^(北京|上海|广州|深圳|杭州|成都|武汉|南京|西安|厦门|苏州|长沙|天津|重庆|郑州|东莞|合肥|佛山|福州|青岛|大连)(\|区)?$/)) {
       result.location = line;
+      locIdx = i;
     }
-    // 标题 - 第一个较长且不含薪资的行
-    else if (!result.title && line.length > 3) {
-      // 跳过学历经验行
-      if (line.match(/^(本科|大专|硕士|博士|经验|在校|应届|不限)/)) continue;
-      result.title = line;
+    // 标题: 第一个不含薪资数字的较长行（不是经验学历行）
+    else if (titleIdx < 0 && line.length > 2) {
+      var isMeta = line.match(/^\d/) ||     // 数字开头（如"3-5年"）
+                   line.match(/年经验|本科|大专|硕士|博士|应届|不限经验|在校/) ||  // 学历经验
+                   line.match(/^\d+[kK万]/);  // 含薪资数字
+      if (!isMeta) {
+        result.title = line;
+        titleIdx = i;
+      }
+    }
+    // 公司: 标题后的第一行短文本
+    else if (titleIdx >= 0 && companyIdx < 0 && line.length > 1 && line.length < 30) {
+      if (i !== salIdx && i !== locIdx && !line.match(/\d+[kK]/)) {
+        result.company = line;
+        companyIdx = i;
+      }
     }
   }
 
-  // 如果标题中有薪资，去掉
+  // 如果标题中有薪资数字，去掉
   if (result.saltRaw && result.title.indexOf(result.saltRaw) !== -1) {
     result.title = result.title.replace(result.saltRaw, "").trim();
   }
+  // 再去掉标题末尾的多余空格和短线
+  result.title = result.title.replace(/[-\s·]+$/, "").trim();
 
-  // 如果还找不到城市，整段搜索
+  // 城市兜底
   if (!result.location) {
     var m = text.match(/北京|上海|广州|深圳|杭州|成都|武汉|南京|西安|厦门/);
     if (m) result.location = m[0];
