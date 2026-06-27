@@ -4,7 +4,7 @@ import { analyzeJob } from "./ai-job-analyzer";
 import { jsonArr, jsonObj } from "@/lib/db-helpers";
 import type { AiAnalysisTask, Job } from "@prisma/client";
 
-const BATCH_SIZE = 5;
+const BATCH_SIZE = 10;
 const MAX_RETRIES = 3;
 const LOCK_DURATION_MS = 5 * 60 * 1000; // 5 分钟锁过期时间
 
@@ -148,100 +148,65 @@ export async function processAiQueue(): Promise<{
   cached: number;
   failed: number;
 }> {
-  console.log("🔧 AI Worker: Starting batch...");
+  let totalProcessed = 0, totalSucceeded = 0, totalCached = 0, totalFailed = 0;
 
-  // 1. 获取待处理任务（跳过已达最大重试次数的）
-  const tasks = await prisma.aiAnalysisTask.findMany({
-    where: {
-      status: "pending",
-      retryCount: { lt: MAX_RETRIES },
-    },
-    orderBy: { createdAt: "asc" },
-    take: BATCH_SIZE,
-  });
+  // 循环处理直到所有 pending 任务完成
+  while (true) {
+    const tasks = await prisma.aiAnalysisTask.findMany({
+      where: {
+        status: "pending",
+        retryCount: { lt: MAX_RETRIES },
+      },
+      orderBy: { createdAt: "asc" },
+      take: BATCH_SIZE,
+    });
 
-  if (tasks.length === 0) {
-    console.log("🔧 AI Worker: No pending tasks");
-    return { processed: 0, succeeded: 0, cached: 0, failed: 0 };
-  }
-
-  console.log(`🔧 AI Worker: Processing ${tasks.length} tasks...`);
-
-  let succeeded = 0;
-  let cached = 0;
-  let failed = 0;
-
-  // 2. 逐个处理（有序处理以避免并发竞争）
-  for (const task of tasks) {
-    // 获取锁
-    const locked = await acquireLock(task.id);
-    if (!locked) {
-      console.log(`⏭️ Task ${task.id} already locked by another worker`);
-      continue;
+    if (tasks.length === 0) {
+      console.log(`🔧 AI Worker: All done — ${totalSucceeded} succeeded (${totalCached} cached), ${totalFailed} failed`);
+      break;
     }
 
-    try {
-      const job = await prisma.job.findUnique({
-        where: { id: task.jobId },
-      });
+    console.log(`🔧 AI Worker: Processing ${tasks.length} tasks...`);
 
-      if (!job) {
-        console.warn(`⚠️ Job ${task.jobId} not found for task ${task.id}`);
-        await prisma.aiAnalysisTask.update({
-          where: { id: task.id },
-          data: { status: "failed", errorMsg: "Job not found" },
-        });
-        failed++;
-        continue;
+    for (const task of tasks) {
+      const locked = await acquireLock(task.id);
+      if (!locked) continue;
+
+      try {
+        const job = await prisma.job.findUnique({ where: { id: task.jobId } });
+        if (!job) {
+          await prisma.aiAnalysisTask.update({
+            where: { id: task.id },
+            data: { status: "failed", errorMsg: "Job not found" },
+          });
+          totalFailed++;
+          continue;
+        }
+
+        const result = await processSingleTask(task, job);
+        totalSucceeded++;
+        if (result.cached) totalCached++;
+      } catch (error) {
+        const updatedTask = await prisma.aiAnalysisTask.findUnique({ where: { id: task.id } });
+        if (updatedTask && updatedTask.retryCount + 1 >= MAX_RETRIES) {
+          await prisma.aiAnalysisTask.update({
+            where: { id: task.id },
+            data: { status: "failed", errorMsg: error instanceof Error ? error.message.substring(0, 500) : "Max retries exceeded", lockKey: null },
+          });
+        } else {
+          await prisma.aiAnalysisTask.update({
+            where: { id: task.id },
+            data: { status: "pending", retryCount: { increment: 1 }, errorMsg: error instanceof Error ? error.message.substring(0, 500) : "Unknown error", lockKey: null },
+          });
+        }
+        totalFailed++;
       }
-
-      const result = await processSingleTask(task, job);
-      succeeded++;
-      if (result.cached) cached++;
-    } catch (error) {
-      console.error(`❌ Task ${task.id} failed:`, error);
-
-      // 失败处理：增加重试计数
-      const updatedTask = await prisma.aiAnalysisTask.findUnique({
-        where: { id: task.id },
-      });
-
-      if (updatedTask && updatedTask.retryCount + 1 >= MAX_RETRIES) {
-        await prisma.aiAnalysisTask.update({
-          where: { id: task.id },
-          data: {
-            status: "failed",
-            errorMsg:
-              error instanceof Error
-                ? error.message.substring(0, 500)
-                : "Max retries exceeded",
-            lockKey: null,
-          },
-        });
-      } else {
-        await prisma.aiAnalysisTask.update({
-          where: { id: task.id },
-          data: {
-            status: "pending",
-            retryCount: { increment: 1 },
-            errorMsg:
-              error instanceof Error
-                ? error.message.substring(0, 500)
-                : "Unknown error",
-            lockKey: null,
-          },
-        });
-      }
-
-      failed++;
     }
+
+    totalProcessed += tasks.length;
   }
 
-  console.log(
-    `🔧 AI Worker: Done — ${succeeded} succeeded (${cached} cached), ${failed} failed`
-  );
-
-  return { processed: tasks.length, succeeded, cached, failed };
+  return { processed: totalProcessed, succeeded: totalSucceeded, cached: totalCached, failed: totalFailed };
 }
 
 /**
