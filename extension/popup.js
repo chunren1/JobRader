@@ -1,63 +1,61 @@
-const NEXTJS_URL = "http://localhost:3000";
-const dot = document.getElementById("statusDot");
-const txt = document.getElementById("statusText");
-const detail = document.getElementById("statusDetail");
-const hint = document.getElementById("hintBox");
-const btn = document.getElementById("extractBtn");
+var NEXTJS_URL = "http://localhost:3000";
+var dot = document.getElementById("dot");
+var txt = document.getElementById("text");
+var detail = document.getElementById("detail");
+var hint = document.getElementById("hint");
+var btn = document.getElementById("extractBtn");
 
-// 检查 Next.js 服务状态
 async function checkHealth() {
   try {
-    const res = await fetch(NEXTJS_URL + "/api/health");
+    var res = await fetch(NEXTJS_URL + "/api/health");
     if (res.ok) {
-      dot.className = "status-dot dot-green";
-      txt.textContent = "✅ 本地服务已连接，准备就绪";
+      dot.className = "dot green";
+      txt.textContent = "本地服务已连接，准备就绪";
       btn.disabled = false;
       hint.style.display = "none";
       return true;
     }
-  } catch (e) { /* offline */ }
-  dot.className = "status-dot dot-red";
-  txt.textContent = "❌ 本地服务离线";
-  detail.textContent = "请先启动 Next.js 项目";
+  } catch (e) {}
+  dot.className = "dot red";
+  txt.textContent = "本地服务离线";
+  detail.textContent = "请先启动 Next.js 项目 (npm run dev)";
   btn.disabled = true;
   hint.style.display = "block";
   return false;
 }
 
-// 提取并同步
-btn.addEventListener("click", async () => {
+btn.addEventListener("click", async function () {
   btn.disabled = true;
-  dot.className = "status-dot dot-blue";
-  txt.textContent = "⏳ 正在提取当前页面岗位...";
+  dot.className = "dot blue";
+  txt.textContent = "正在提取当前页面岗位...";
   detail.textContent = "";
   btn.textContent = "处理中...";
 
   try {
-    const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+    var tabs = await chrome.tabs.query({ active: true, currentWindow: true });
+    var tab = tabs[0];
 
     if (!tab.id) throw new Error("无法获取当前标签页");
     if (!tab.url || !tab.url.includes("zhipin.com")) {
       throw new Error("请在职位列表页使用此工具");
     }
 
-    const response = await chrome.tabs.sendMessage(tab.id, { action: "EXTRACT_AND_SYNC" });
+    var response = await chrome.tabs.sendMessage(tab.id, { action: "EXTRACT_AND_SYNC" });
 
-    if (response?.success) {
-      dot.className = "status-dot dot-green";
-      txt.textContent = `✅ 成功同步 ${response.count} 个岗位！`;
-      if (response.ingested > 0) detail.textContent = `新增 ${response.ingested} 个`;
-      if (response.updated > 0) detail.textContent += (detail.textContent ? "， " : "") + `更新 ${response.updated} 个`;
-      detail.textContent += "，AI 正在后台分析中";
-
-      // 3 秒后恢复
+    if (response && response.success) {
+      dot.className = "dot green";
+      txt.textContent = "成功同步 " + response.count + " 个岗位！";
+      var d = "";
+      if (response.ingested > 0) d += "新增 " + response.ingested + " 个";
+      if (response.updated > 0) d += (d ? "，" : "") + "更新 " + response.updated + " 个";
+      detail.textContent = d + "，AI 正在后台分析中";
       setTimeout(checkHealth, 5000);
     } else {
-      throw new Error(response?.error || "提取失败");
+      throw new Error((response && response.error) || "提取失败");
     }
   } catch (err) {
-    dot.className = "status-dot dot-red";
-    txt.textContent = "❌ " + err.message;
+    dot.className = "dot red";
+    txt.textContent = err.message;
     detail.textContent = "";
   } finally {
     btn.disabled = false;
@@ -65,10 +63,8 @@ btn.addEventListener("click", async () => {
   }
 });
 
-// 打开 Dashboard
-document.getElementById("dashboardBtn").addEventListener("click", () => {
+document.getElementById("dashboardBtn").addEventListener("click", function () {
   chrome.tabs.create({ url: NEXTJS_URL + "/dashboard" });
 });
 
-// 启动时检查
 checkHealth();
