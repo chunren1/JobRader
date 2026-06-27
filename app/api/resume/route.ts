@@ -35,24 +35,34 @@ export async function POST(request: NextRequest) {
     const formData = await request.formData();
     const file = formData.get("file") as File;
     if (!file) return NextResponse.json({ success: false, error: "No file" }, { status: 400 });
-    if (file.type !== "application/pdf" && !file.name.endsWith(".pdf")) {
-      return NextResponse.json({ success: false, error: "只支持 PDF" }, { status: 400 });
+
+    const isPDF = file.type === "application/pdf" || file.name.endsWith(".pdf");
+    const isMD = file.name.endsWith(".md") || file.type === "text/markdown" || file.type === "text/plain";
+    if (!isPDF && !isMD) {
+      return NextResponse.json({ success: false, error: "只支持 PDF/MD 文件" }, { status: 400 });
     }
 
     let rawText = "";
-    try {
-      const pdfParse = (await import("pdf-parse")).default;
-      const buffer = Buffer.from(await file.arrayBuffer());
-      const data = await pdfParse(buffer);
-      rawText = data.text;
-    } catch (e: any) {
-      console.error("PDF parse failed:", e?.message || e);
+
+    if (isMD) {
+      // Markdown: 直接读文本
+      rawText = await file.text();
+    } else {
+      // PDF: 尝试提取文字
+      try {
+        const pdfParse = (await import("pdf-parse")).default;
+        const buffer = Buffer.from(await file.arrayBuffer());
+        const data = await pdfParse(buffer);
+        rawText = data.text;
+      } catch (e: any) {
+        console.error("PDF parse failed:", e?.message || e);
+      }
     }
 
-    if (!rawText || rawText.trim().length < 50) {
+    if (!rawText || rawText.trim().length < 30) {
       return NextResponse.json({
         success: false,
-        error: "PDF无法提取文字（扫描件/图片型）。请用Word打开后另存为PDF，或直接在侧边栏粘贴简历文本。"
+        error: isMD ? "文件内容太短" : "PDF无法提取文字。建议将简历复制到.md文件上传，或用粘贴功能。"
       }, { status: 400 });
     }
 

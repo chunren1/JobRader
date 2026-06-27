@@ -245,8 +245,8 @@ export default function Dashboard() {
                 <svg className="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                   <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/>
                 </svg>
-                {resumeUploading ? "上传中..." : resumeText ? "简历已加载 ✓" : "上传简历 (PDF)"}
-                <input type="file" accept=".pdf" onChange={handleResumeUpload} className="hidden" disabled={resumeUploading} />
+                {resumeUploading ? "上传中..." : resumeText ? "简历已加载 ✓" : "上传简历 (PDF/MD)"}
+                <input type="file" accept=".pdf,.md,.txt" onChange={handleResumeUpload} className="hidden" disabled={resumeUploading} />
               </label>
               <button
                 onClick={handlePasteResume}
