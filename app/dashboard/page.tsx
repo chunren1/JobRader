@@ -82,6 +82,11 @@ export default function Dashboard() {
     });
   }, []);
 
+  const displayJobs =
+    viewMode === "favorites"
+      ? jobs.filter((j) => favoritedIds.has(j.id))
+      : jobs;
+
   const selectAll = useCallback(() => {
     setSelectedIds(new Set(displayJobs.map(j => j.id)));
   }, [displayJobs]);
@@ -112,11 +117,6 @@ export default function Dashboard() {
     },
     [updateFilters]
   );
-
-  const displayJobs =
-    viewMode === "favorites"
-      ? jobs.filter((j) => favoritedIds.has(j.id))
-      : jobs;
 
   return (
     <div className="min-h-screen bg-background">
