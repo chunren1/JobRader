@@ -242,6 +242,24 @@ chrome.runtime.onMessage.addListener(function (msg, sender, sendResponse) {
         });
 
         var jobs = extractJobs();
+
+        // 如果没有提取成功，输出样本数据帮助调试
+        if (jobs.length === 0) {
+          var samples = [];
+          var allLinks = document.querySelectorAll("a[href]");
+          allLinks.forEach(function(l) {
+            if (samples.length >= 3) return;
+            var h = l.href || l.getAttribute("href") || "";
+            if (!h || h === "#" || h.startsWith("javascript") || h.length < 20) return;
+            var c = l.closest("li") || l.closest("[class*='card']") || l.closest("[class*='item']") || l.parentElement;
+            if (!c) return;
+            var txt = (c.innerText || c.textContent || "").substring(0, 200);
+            var cls = c.className || "";
+            samples.push({ text: txt, class: cls.substring(0, 60), tag: c.tagName });
+          });
+          console.log("[JobRadar] Sample card texts:", JSON.stringify(samples));
+        }
+
         console.log("[JobRadar] Extracted " + jobs.length + " jobs");
 
         if (jobs.length === 0) {
