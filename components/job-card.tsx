@@ -11,6 +11,7 @@ import {
   CheckCircle2,
   Tag,
   Loader2,
+  Trash2,
 } from "lucide-react";
 import { cn, formatSalary, formatTimeAgo } from "@/lib/utils";
 import { ScoreBadge, RecommendationBadge, SalaryMatchBadge } from "./status-badge";
@@ -20,6 +21,7 @@ import type { JobFilters } from "@/lib/hooks/use-jobs";
 interface JobCardProps {
   job: JobData;
   onToggleFavorite: (jobId: string) => Promise<void>;
+  onDelete: (jobId: string) => Promise<void>;
   onTagClick?: (tag: string) => void;
   isFavorited: boolean;
 }
@@ -27,12 +29,15 @@ interface JobCardProps {
 export function JobCard({
   job,
   onToggleFavorite,
+  onDelete,
   onTagClick,
   isFavorited,
 }: JobCardProps) {
   const [expanded, setExpanded] = useState(false);
   const [favoriteLoading, setFavoriteLoading] = useState(false);
   const [optimisticFav, setOptimisticFav] = useState(isFavorited);
+  const [deleteLoading, setDeleteLoading] = useState(false);
+  const [deleted, setDeleted] = useState(false);
 
   const handleToggleFav = useCallback(
     async (e: React.MouseEvent) => {
@@ -49,6 +54,23 @@ export function JobCard({
     },
     [job.id, onToggleFavorite]
   );
+
+  const handleDelete = useCallback(
+    async (e: React.MouseEvent) => {
+      e.stopPropagation();
+      if (!confirm("确定删除这个岗位吗？")) return;
+      setDeleteLoading(true);
+      try {
+        await onDelete(job.id);
+        setDeleted(true);
+      } catch {
+        setDeleteLoading(false);
+      }
+    },
+    [job.id, onDelete]
+  );
+
+  if (deleted) return null;
 
   // 点击标题跳转到原始岗位页面
   const handleOpenJob = useCallback(
@@ -84,23 +106,38 @@ export function JobCard({
             </p>
           </div>
 
-          <button
-            onClick={handleToggleFav}
-            disabled={favoriteLoading}
-            className={cn(
-              "flex-shrink-0 rounded-lg p-2 transition-colors z-10",
-              favoriteLoading && "opacity-50"
-            )}
-            aria-label={optimisticFav ? "取消收藏" : "加入收藏"}
-          >
-            {favoriteLoading ? (
-              <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
-            ) : optimisticFav ? (
-              <Heart className="h-5 w-5 fill-red-500 text-red-500" />
-            ) : (
-              <Heart className="h-5 w-5 text-muted-foreground hover:text-red-400" />
-            )}
-          </button>
+          <div className="flex items-center gap-1 flex-shrink-0 z-10">
+            <button
+              onClick={handleToggleFav}
+              disabled={favoriteLoading}
+              className={cn(
+                "rounded-lg p-2 transition-colors",
+                favoriteLoading && "opacity-50"
+              )}
+              aria-label={optimisticFav ? "取消收藏" : "加入收藏"}
+            >
+              {favoriteLoading ? (
+                <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
+              ) : optimisticFav ? (
+                <Heart className="h-5 w-5 fill-red-500 text-red-500" />
+              ) : (
+                <Heart className="h-5 w-5 text-muted-foreground hover:text-red-400" />
+              )}
+            </button>
+
+            <button
+              onClick={handleDelete}
+              disabled={deleteLoading}
+              className="rounded-lg p-2 transition-colors text-muted-foreground hover:text-red-500"
+              aria-label="删除岗位"
+            >
+              {deleteLoading ? (
+                <Loader2 className="h-4 w-4 animate-spin" />
+              ) : (
+                <Trash2 className="h-4 w-4" />
+              )}
+            </button>
+          </div>
         </div>
 
         {/* Meta: Salary + Location + Time */}

@@ -59,6 +59,20 @@ export default function Dashboard() {
     [toggle]
   );
 
+  const handleDelete = useCallback(
+    async (jobId: string) => {
+      // 乐观移除：立即从列表中去掉
+      setFavoritedIds((prev) => { const n = new Set(prev); n.delete(jobId); return n; });
+      await fetch("/api/jobs", {
+        method: "DELETE",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ ids: [jobId] }),
+      });
+      refetch();
+    },
+    [refetch]
+  );
+
   const handleTagClick = useCallback(
     (tag: string) => {
       updateFilters({ search: tag });
@@ -249,6 +263,7 @@ export default function Dashboard() {
                       key={job.id}
                       job={job}
                       onToggleFavorite={handleToggleFavorite}
+                      onDelete={handleDelete}
                       onTagClick={handleTagClick}
                       isFavorited={favoritedIds.has(job.id)}
                     />

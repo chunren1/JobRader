@@ -63,3 +63,30 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ success: false, error: "Failed to fetch jobs" }, { status: 500 });
   }
 }
+
+/**
+ * 删除岗位
+ * DELETE /api/jobs
+ * Body: { ids: string[] }
+ */
+export async function DELETE(request: NextRequest) {
+  try {
+    const body = await request.json();
+    const ids: string[] = body.ids;
+    if (!ids || !Array.isArray(ids) || ids.length === 0) {
+      return NextResponse.json({ success: false, error: "ids required" }, { status: 400 });
+    }
+
+    // 级联删除：先删关联任务、收藏、缓存，再删岗位
+    await prisma.$transaction([
+      prisma.aiAnalysisTask.deleteMany({ where: { jobId: { in: ids } } }),
+      prisma.userFavorite.deleteMany({ where: { jobId: { in: ids } } }),
+      prisma.job.deleteMany({ where: { id: { in: ids } } }),
+    ]);
+
+    return NextResponse.json({ success: true, deleted: ids.length });
+  } catch (error) {
+    console.error("Delete jobs error:", error);
+    return NextResponse.json({ success: false, error: "Failed to delete" }, { status: 500 });
+  }
+}
