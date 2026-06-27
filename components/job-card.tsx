@@ -50,17 +50,34 @@ export function JobCard({
     [job.id, onToggleFavorite]
   );
 
+  // 点击标题跳转到原始岗位页面
+  const handleOpenJob = useCallback(
+    (e: React.MouseEvent) => {
+      e.stopPropagation();
+      window.open(job.rawUrl, "_blank", "noopener,noreferrer");
+    },
+    [job.rawUrl]
+  );
+
   return (
-    <div className="rounded-xl border bg-card shadow-sm transition-all hover:shadow-md">
+    <div className="rounded-xl border bg-card shadow-sm transition-all hover:shadow-md hover:border-primary/30">
       <div className="p-5">
-        {/* Header: Title + Score + Favorite */}
+        {/* Header: Title + Score + Favorite — 点击标题跳转到岗位页面 */}
         <div className="mb-3 flex items-start justify-between gap-3">
-          <div className="min-w-0 flex-1">
+          <div
+            className="min-w-0 flex-1 cursor-pointer group"
+            onClick={handleOpenJob}
+            role="button"
+            tabIndex={0}
+            onKeyDown={(e) => { if (e.key === "Enter") handleOpenJob(e as unknown as React.MouseEvent); }}
+            aria-label={`打开 ${job.title} 的岗位页面`}
+          >
             <div className="mb-1 flex items-center gap-2 flex-wrap">
-              <h3 className="text-base font-semibold leading-tight truncate">
+              <h3 className="text-base font-semibold leading-tight truncate group-hover:text-primary transition-colors">
                 {job.title}
               </h3>
               <ScoreBadge score={job.aiScore} />
+              <ExternalLink className="h-3.5 w-3.5 text-muted-foreground/40 opacity-0 group-hover:opacity-100 transition-opacity flex-shrink-0" />
             </div>
             <p className="text-sm font-medium text-muted-foreground">
               {job.company}
@@ -71,7 +88,7 @@ export function JobCard({
             onClick={handleToggleFav}
             disabled={favoriteLoading}
             className={cn(
-              "flex-shrink-0 rounded-lg p-2 transition-colors",
+              "flex-shrink-0 rounded-lg p-2 transition-colors z-10",
               favoriteLoading && "opacity-50"
             )}
             aria-label={optimisticFav ? "取消收藏" : "加入收藏"}
@@ -145,7 +162,7 @@ export function JobCard({
 
         {/* Expand Toggle */}
         <button
-          onClick={() => setExpanded(!expanded)}
+          onClick={(e) => { e.stopPropagation(); setExpanded(!expanded); }}
           className="inline-flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground transition-colors"
         >
           {expanded ? (
@@ -238,18 +255,6 @@ export function JobCard({
                 </div>
               </div>
             )}
-
-            {/* External Link */}
-            <a
-              href={job.rawUrl}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="inline-flex items-center gap-1.5 text-xs text-primary hover:underline"
-              onClick={(e) => e.stopPropagation()}
-            >
-              查看原始链接
-              <ExternalLink className="h-3 w-3" />
-            </a>
           </div>
         )}
       </div>
