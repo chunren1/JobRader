@@ -48,7 +48,11 @@ btn.addEventListener("click", async function () {
       var d = "";
       if (response.ingested > 0) d += "新增 " + response.ingested + " 个";
       if (response.updated > 0) d += (d ? "，" : "") + "更新 " + response.updated + " 个";
-      detail.textContent = d + "，AI 正在后台分析中";
+      detail.textContent = d + "，AI 正在后台分析中...";
+
+      // 自动触发 AI 分析
+      fetch(NEXTJS_URL + "/api/workers/ai-analyze", { method: "POST" }).catch(function(){});
+
       setTimeout(checkHealth, 5000);
     } else {
       throw new Error((response && response.error) || "提取失败");
