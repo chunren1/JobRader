@@ -1,0 +1,757 @@
+这是一个非常有挑战性但也极具实用价值的项目。在开始之前，必须郑重提示：Boss直聘等招聘平台有严格的反爬机制和用户协议，未经授权的大规模数据采集可能涉及法律风险及账号封禁。
+
+以下方案将基于 “合规辅助工具” 的定位设计（例如：作为浏览器插件辅助用户手动筛选、或仅获取公开API/用户已授权Cookie下的个人数据聚合），而非暴力爬虫。我们将重点放在架构设计、AI辅助开发流程规范以及第一版Prompt工程上。
+
+一、 项目大纲：Boss直聘高质量岗位智能聚合服务
+
+1. 核心功能模块
+-   数据采集层 (合规): 浏览器插件 (Extension) / 本地代理模式，复用用户登录态，避免服务端直接请求。
+-   AI 筛选与评分层: 基于 LLM 对 JD 进行语义分析，根据用户简历/偏好打分，过滤“外包/虚假/低质”岗位。
+-   数据持久化层: 结构化存储岗位信息、收藏状态、AI 分析摘要。
+-   可视化前端: 岗位看板、薪资分布图、技能需求词云、收藏管理。
+-   用户系统: 简单的账号体系，支持多设备同步收藏。
+
+2. 推荐技术栈 (适合 AI 辅助生成)
+层级   技术选型   理由
+前端   Next.js 14+ (App Router) + TailwindCSS + Shadcn/UI   AI 生成代码质量最高，组件库丰富
+图表   Recharts / ECharts   声明式图表，AI 易理解
+后端   Next.js API Routes 或 Python FastAPI   全栈统一或独立高性能服务
+数据库   PostgreSQL + Prisma ORM   Schema 驱动，AI 生成 CRUD 准确率高
+AI   OpenAI/Claude API + LangChain/LlamaIndex   结构化输出解析能力强
+采集   Chrome Extension (Manifest V3)   合规、绕过大部分风控
+
+二、 AI 辅助开发规范 (Harness & Best Practices)
+
+在使用 AI 开发时，不要直接说“帮我写个爬虫”，而应遵循以下工程化规范：
+
+1.  Context First (上下文优先): 每次对话前提供 tech-stack.md, schema.prisma, project-rules.md。
+2.  Atomic Tasks (原子化任务): 将大需求拆解为单一职责的小任务（如：“创建 Job 表的 Prisma Schema” 而非 “做个数据库”）。
+3.  TDD/BDD 导向: 要求 AI 先写测试用例或接口契约，再写实现。
+4.  Structured Output (结构化输出): 强制 AI 返回 JSON/Zod Schema，而非自由文本。
+5.  Safety Harness (安全护栏): 在 System Prompt 中明确禁止生成违反 ToS 的代码，要求使用官方 API 或浏览器扩展方式。
+
+三、 第一版提示词工程 (System Prompt Template)
+
+将此模板保存为 .cursorrules 或 AI IDE 的系统指令中。这是你项目的“宪法”。
+
+# Role: Senior Full-Stack Engineer & AI Product Architect
+You are an expert developer specializing in building compliant job aggregation tools using Next.js, TypeScript, and LLM integration.
+
+## Project Context
+We are building "JobRadar", a personal dashboard that helps users filter high-quality jobs from Boss Zhipin via a browser extension (compliant approach) and visualize them with AI-powered scoring.
+
+## Tech Stack Constraints
+- Framework: Next.js 14+ (App Router, Server Actions)
+- Language: TypeScript (Strict mode enabled)
+- Styling: TailwindCSS + Shadcn/UI components
+- Database: PostgreSQL + Prisma ORM
+- AI: Zod for structured output validation, no raw JSON parsing
+- State: Zustand or React Context (no Redux)
+- Testing: Vitest + Playwright
+
+## Coding Standards (Non-Negotiable)
+1. NEVER generate web scraping code that bypasses authentication or violates robots.txt. Always assume data comes from a browser extension message passing or official API.
+2. All AI responses MUST be validated against a Zod schema before use.
+3. Use Server Components by default; only add 'use client' when interactivity is required.
+4. Error handling must be explicit. No silent failures.
+5. Comments should explain "WHY", not "WHAT". Code should be self-documenting.
+6. When creating UI, always consider accessibility (a11y) and responsive design.
+
+## Current Phase: MVP Foundation
+Focus on: Database schema design, basic job listing page, and AI scoring prompt template.
+
+## Response Format
+When asked to implement a feature:
+1. Briefly outline the approach and potential risks.
+2. Provide complete, copy-pasteable code blocks with file paths.
+3. Include necessary Zod schemas for any AI/data contracts.
+4. Suggest 1-2 test cases to verify the implementation.
+
+## Safety & Compliance Reminder
+If a user request implies violating platform ToS, politely redirect to a compliant alternative (e.g., "Instead of server-side scraping, let's build a Chrome Extension content script that runs in the user's browser session.").
+
+四、 第一个具体任务的 Prompt 示例
+
+在设置好上述 System Prompt 后，用以下 Prompt 启动开发：
+
+Task: Design the Prisma schema for the Job and UserFavorite models.
+Requirements:
+1. Job model must include: id, title, company, salaryRange (min/max), location, jdContent, aiScore (0-100), aiSummary, tags[], rawUrl, fetchedAt.
+2. UserFavorite model supports soft delete and custom notes.
+3. Add indexes for filtering by aiScore and location.
+4. Output ONLY the schema.prisma file content and a brief explanation of index choices.
+5. Ensure field names follow camelCase convention.
+
+五、 关键风险提示与建议
+
+1.  合规红线: 切勿做“代搜”、“批量投递”等功能。定位为 “个人效率工具”，数据仅在用户本地/私有服务器处理，不对外提供数据接口。
+2.  AI 成本控制: JD 内容很长，先用规则引擎初筛（薪资、关键词），再对候选岗位调用 LLM 精评，避免 Token 爆炸。
+3.  反检测: 即使使用插件，也要模拟人类行为（随机延迟、限制频率）。建议每日采集上限设为 50-100 条。
+4.  数据安全: 用户的 Cookie/Token 必须加密存储，绝不上传到第三方服务器。推荐使用本地 SQLite + 云端元数据同步的混合架构。
+
+六、 下一步行动清单
+
+1.  [ ] 初始化 Next.js + Prisma 项目
+2.  [ ] 将上述 System Prompt 配置到你的 AI IDE (Cursor/Windsurf/Copilot)
+3.  [ ] 让 AI 生成数据库 Schema 并迁移
+4.  [ ] 开发 Chrome Extension Manifest V3 基础框架
+5.  [ ] 实现 Extension ↔ Next.js 的消息通信桥梁
+
+需要我进一步展开某个模块的具体 Prompt 或架构图吗？
+
+好的，既然你需要进一步展开，我们将深入核心的架构设计与分模块 Prompt 工程。为了确保 AI 生成的代码高质量且符合“合规个人工具”的定位，我们将项目拆解为三个关键战役：数据通信桥梁、AI 结构化评分引擎、可视化看板。
+
+以下是详细的架构图解与对应的 Harness Prompt。
+
+一、 核心架构：Extension ↔ Next.js 安全通信桥
+
+这是整个项目的基石。不能让 Next.js 服务端直接去请求 Boss 直聘，而是由浏览器插件在用户浏览页面时提取数据，通过本地 HTTP 请求发送给 Next.js API 进行处理和存储。
+
+️ 架构流转图
+graph LR
+    User[用户浏览Boss直聘] --> Ext[Chrome Extension<br/>Content Script]
+    Ext --1.提取JD/列表--> LocalAPI[Next.js Local API<br/>localhost:3000/api/jobs]
+    LocalAPI --2.校验+入库--> DB
+    LocalAPI --3.异步调用--> LLM[AI Scoring Service]
+    LLM --4.返回结构化评分--> DB
+    Dashboard[Next.js Dashboard] --5.读取展示--> DB
+
+ 模块 1 Prompt：构建通信桥梁
+Context: Refer to .cursorrules. We are implementing the data bridge between Chrome Extension and Next.js.
+Task: Create a secure local ingestion API endpoint and the corresponding extension content script message sender.
+Specific Requirements:
+1.  Next.js API (app/api/jobs/ingest/route.ts):
+-   Accept POST requests with job data array.
+-   Validate payload using Zod schema JobIngestSchema.
+-   Implement a simple shared-secret header check (e.g., X-Local-Secret) to prevent external abuse.
+-   Use Prisma upsert based on rawUrl to avoid duplicates.
+-   Return { success: true, count: number }.
+2.  Extension Utility (src/utils/sync.ts):
+-   Function syncJobsToLocal(jobs: Job[]) that sends data to http://localhost:3000/api/jobs/ingest.
+-   Include retry logic (max 3 times) and error logging.
+3.  Zod Schema: Define JobIngestSchema strictly matching what the extension can extract.
+Output Format: Complete file contents with paths, plus a curl command to test the API locally.
+
+二、 AI 引擎：结构化 JD 评分与摘要
+
+AI 的核心价值是将非结构化的 JD 转化为可量化的决策依据。必须强制使用 Structured Output，否则后续可视化无法实现。
+
+🧠 模块 2 Prompt：AI 评分服务
+Context: Refer to .cursorrules. Building the AI scoring service for job quality assessment.
+Task: Implement an AI service that scores jobs based on user preferences and returns structured data.
+Specific Requirements:
+1.  Zod Schema (schemas/job-analysis.ts):
+>     export const JobAnalysisSchema = z.object({
+>       score: z.number().min(0).max(100).describe("综合匹配度评分"),
+>       salaryMatch: z.enum(["低于预期", "符合预期", "高于预期"]),
+>       techStackMatch: z.array(z.string()).describe("匹配的技术栈"),
+>       redFlags: z.array(z.string()).describe("潜在风险点，如外包、加班严重等"),
+>       summary: z.string().max(200).describe("一句话岗位亮点总结"),
+>       recommendation: z.enum(["强烈推荐", "可以考虑", "不推荐"])
+>     });
+>     
+2.  Service (services/ai-job-analyzer.ts):
+-   Use OpenAI/Claude SDK with response_format: { type: "json_schema" } or equivalent structured output mode.
+-   System prompt must include user's resume summary and job preferences as context.
+-   Handle token limits: truncate JD content to 3000 chars intelligently.
+3.  Error Handling: If AI returns invalid JSON, implement a fallback parser or return a default "analysis failed" object. Never throw unhandled exceptions.
+Output Format: Service code, Zod schema, and the exact system prompt template string.
+
+三、 前端可视化：高质量岗位看板
+
+基于 Shadcn/UI + Recharts，让 AI 生成的数据直观呈现。
+
+ 模块 3 Prompt：可视化看板页面
+Context: Refer to .cursorrules. Building the main dashboard page.
+Task: Create a responsive job dashboard with filtering, AI score visualization, and favorites management.
+Specific Requirements:
+1.  Layout: Sidebar navigation + Main content area. Use Shadcn Card, Badge, Button components.
+2.  Job List Component:
+-   Display title, company, salary, AI score (color-coded badge), and summary.
+-   "Favorite" toggle button with optimistic UI update.
+-   Filter bar: Score range slider, location select, recommendation level tabs.
+3.  Analytics Section (Top of page):
+-   Recharts BarChart: AI Score distribution.
+-   Recharts PieChart: Recommendation level breakdown.
+4.  Data Fetching: Use Server Component to fetch initial data, Client Component for interactive filters. Implement URL search params sync for shareable filter states.
+5.  Empty State: Meaningful illustration when no jobs match filters.
+Output Format: Page component, sub-components, and any required server action for toggling favorites.
+
+四、 AI 开发 Harness 检查清单
+
+在每个模块开发完成后，用以下 Prompt 让 AI 自查：
+
+Review Task: Act as a senior code reviewer. Review the code you just generated against these criteria:
+1.  ✅ All AI outputs validated by Zod before database write or UI render?
+2.  ✅ No hardcoded secrets or API keys?
+3.  ✅ Extension communication uses localhost-only binding?
+4.  ✅ TypeScript strict mode compliant (no any types)?
+5.  ✅ UI components are accessible (aria labels, keyboard nav)?
+6.  ✅ Error boundaries in place for AI service failures?
+List any violations found and provide corrected code blocks.
+
+五、 进阶建议：提升“高质量”筛选准确率
+
+1.  Few-Shot Prompting: 在 AI 评分的 System Prompt 中，提供 3-5 个你手动标注过的“好岗位/坏岗位”样本，让 AI 学习你的主观标准。
+2.  反馈闭环: 在前端增加“评分不准”按钮，收集用户修正数据，定期微调 Prompt 或 fine-tune 小模型。
+3.  多维度评分: 除了综合分，拆分为“技术匹配度”、“薪资竞争力”、“公司稳定性”、“成长空间”四个子维度，雷达图展示更直观。
+4.  本地优先架构: 考虑将 SQLite + Llama.cpp 作为离线备选方案，敏感简历数据不出本机。
+
+⚠️ 再次强调合规底线
+
+-   不做: 自动投递简历、批量打招呼、破解加密参数、绕过登录验证。
+-   只做: 用户主动触发采集、个人数据本地处理、辅助信息整理与可视化。
+-   声明: 在项目 README 和插件商店描述中明确标注“本工具仅为个人信息管理辅助，不与任何招聘平台官方关联，请遵守平台使用条款”。
+
+需要我针对某个具体模块（比如 AI 评分的 Few-Shot Prompt 模板，或者 Chrome Extension Manifest V3 的完整配置）提供更深入的代码级指导吗？
+
+好的，我们继续推进。接下来要打通的是 “用户触发采集的交互入口” (Extension Popup) 与 “AI 评分的异步处理管道” (Batch Queue)。
+
+这两个模块解决了 MVP 落地中最现实的两个痛点：
+1.  Popup: 让用户能直观地看到“当前页面提取了多少岗位”、“同步状态如何”，并提供手动触发按钮，彻底规避“后台偷偷爬取”的合规风险。
+2.  Batch Queue: AI 接口昂贵且耗时，绝不能阻塞数据入库。必须将“采集入库”与“AI 分析”解耦，实现异步批量处理。
+
+一、 Extension Popup 完整实现
+
+Popup 是用户与插件交互的唯一窗口，需保持轻量、状态反馈即时。
+
+ extension/src/popup.tsx (使用 Preact/React 构建)
+
+import { useState, useEffect } from 'preact/hooks';
+
+type SyncStatus = 'idle' | 'extracting' | 'syncing' | 'success' | 'error';
+
+export function Popup() {
+  const [status, setStatus] = useState<SyncStatus>('idle');
+  const [count, setCount] = useState(0);
+  const [errorMsg, setErrorMsg] = useState('');
+
+  // 检查 Next.js 本地服务是否在线
+  useEffect(() => {
+    fetch('http://localhost:3000/api/health')
+      .then(() => setStatus('idle'))
+      .catch(() => {
+        setStatus('error');
+        setErrorMsg('未检测到 JobRadar 本地服务，请先启动 Next.js 项目');
+      });
+  }, []);
+
+  const handleExtractAndSync = async () => {
+    setStatus('extracting');
+    setCount(0);
+    setErrorMsg('');
+
+    try {
+      // 向 Content Script 发送消息
+      const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+      
+      if (!tab.id || !tab.url?.includes('zhipin.com')) {
+        throw new Error('请在 Boss直聘 职位列表页使用此工具');
+      }
+
+      const response = await chrome.tabs.sendMessage(tab.id, { action: 'EXTRACT_AND_SYNC' });
+      
+      if (response?.success) {
+        setCount(response.count);
+        setStatus('success');
+      } else {
+        throw new Error(response?.error || '提取失败');
+      }
+    } catch (err: any) {
+      setStatus('error');
+      setErrorMsg(err.message);
+    }
+  };
+
+  return (
+    <div class="w-80 p-4 space-y-4 font-sans">
+      <h1 class="text-lg font-bold text-gray-800"> JobRadar Assistant</h1>
+      
+      <div class="text-sm text-gray-600 bg-gray-50 p-3 rounded-md">
+        {status === 'idle' && '✅ 本地服务已连接，准备就绪'}
+        {status === 'extracting' && '⏳ 正在提取当前页面岗位...'}
+        {status === 'syncing' && ' 正在同步至本地数据库...'}
+        {status === 'success' && `✅ 成功同步 {count} 个岗位！AI 正在后台分析中`}
+        {status === 'error' && `❌ {errorMsg}`}
+      </div>
+
+      <button
+        onClick={handleExtractAndSync}
+        disabled={status === 'extracting' || status === 'syncing' || status === 'error'}
+        class={`w-full py-2 px-4 rounded-md text-white font-medium transition-colors {
+          status === 'error' 
+            ? 'bg-gray-400 cursor-not-allowed' 
+            : 'bg-blue-600 hover:bg-blue-700 active:bg-blue-800'
+        }`}
+      >
+        {status === 'extracting' || status === 'syncing' ? '处理中...' : '提取并同步当前页面'}
+      </button>
+
+      <p class="text-xs text-gray-400 text-center">
+        仅在当前页面手动触发 · 数据仅存储于本地
+      </p>
+    </div>
+  );
+}
+
+ Content Script 消息响应补全
+
+在之前的 content-script.ts 中，需要补充对 Popup 消息的响应逻辑：
+
+// extension/src/content-script.ts (补充部分)
+chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
+  if (msg.action === 'EXTRACT_AND_SYNC') {
+    (async () => {
+      try {
+        const jobs = await extractCurrentPageJobs();
+        if (jobs.length === 0) {
+          sendResponse({ success: false, error: '当前页面未检测到职位卡片' });
+          return;
+        }
+        
+        await syncToNextJobs(jobs);
+        sendResponse({ success: true, count: jobs.length });
+      } catch (err: any) {
+        sendResponse({ success: false, error: err.message });
+      }
+    })();
+    
+    // ⚠️ 关键：返回 true 表示异步响应，否则 sendResponse 会立即失效
+    return true; 
+  }
+});
+
+二、 AI 评分异步批处理队列
+
+为避免 AI 调用阻塞主流程，采用 “入库即返回 + 后台轮询消费” 的轻量级队列模式。无需引入 Redis/BullMQ 等重型依赖，纯数据库驱动，适合个人工具。
+
+️ 1. Schema 补充：任务队列表
+
+// prisma/schema.prisma 追加
+model AiAnalysisTask {
+  id        String   @id @default(cuid())
+  jobId     String   @unique
+  status    String   @default("pending") // pending | processing | completed | failed
+  retryCount Int     @default(0)
+  errorMsg  String?  @db.VarChar(500)
+  
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  
+  @@index([status, createdAt])
+  @@map("ai_analysis_tasks")
+}
+
+⚙️ 2. 入库时自动创建任务
+
+修改之前的 Ingest API：
+
+// app/api/jobs/ingest/route.ts (关键片段)
+// 在 upsert job 之后，自动创建 AI 分析任务
+await prisma.transaction(async (tx) => {
+  // 1. 批量 upsert jobs
+  for (const job of validJobs) {
+    await tx.job.upsert({
+      where: { rawUrl: job.rawUrl },
+      create: { ...job },
+      update: { ...job } // 可选：更新时重置 AI 评分
+    });
+  }
+  
+  // 2. 为新增/更新的 job 创建待分析任务
+  const tasks = validJobs.map(j => ({
+    jobId: j.rawUrl, // 注意：这里需要用 job.id，实际应先查id或用rawUrl关联
+    status: 'pending'
+  }));
+  
+  await tx.aiAnalysisTask.createMany({
+    data: tasks,
+    skipDuplicates: true
+  });
+});
+
+ 3. 后台消费 Worker (Cron / 长轮询)
+
+创建一个独立的 API 路由作为 Worker 入口，可通过 Vercel Cron / node-cron / 甚至前端定时 fetch 触发：
+
+// app/api/workers/ai-analyze/route.ts
+import { analyzeJob } from '@/services/ai-job-analyzer';
+import { prisma } from '@/lib/prisma';
+
+const BATCH_SIZE = 5; // 每批处理5个，控制并发
+const MAX_RETRIES = 3;
+
+export async function POST() {
+  // 简单锁机制，防止多实例重复消费
+  const lockKey = 'ai_worker_lock';
+  // ... 省略分布式锁实现，单机可用内存变量或DB行锁
+  
+  try {
+    // 1. 获取待处理任务
+    const tasks = await prisma.aiAnalysisTask.findMany({
+      where: { 
+        status: 'pending',
+        retryCount: { lt: MAX_RETRIES }
+      },
+      orderBy: { createdAt: 'asc' },
+      take: BATCH_SIZE
+    });
+
+    if (tasks.length === 0) return Response.json({ processed: 0 });
+
+    // 2. 标记为处理中（防重复）
+    await prisma.aiAnalysisTask.updateMany({
+      where: { id: { in: tasks.map(t => t.id) } },
+      data: { status: 'processing' }
+    });
+
+    // 3. 并行调用 AI
+    const results = await Promise.allSettled(
+      tasks.map(async (task) => {
+        const job = await prisma.job.findUnique({ where: { id: task.jobId } });
+        if (!job) throw new Error('Job not found');
+        
+        // 获取用户画像（简化示例）
+        const userProfile = { 
+          resumeSummary: '5年Go后端', 
+          preferences: '云原生/高并发', 
+          expectedSalary: '30-50K' 
+        };
+        
+        const analysis = await analyzeJob(job.jdContent, userProfile);
+        if (!analysis) throw new Error('AI returned invalid output');
+        
+        // 4. 事务更新：AI结果 + 任务状态
+        await prisma.transaction([
+          prisma.job.update({
+            where: { id: task.jobId },
+            data: {
+              aiScore: analysis.score,
+              aiSummary: analysis.summary,
+              aiRecommendation: analysis.recommendation,
+              aiTechMatch: analysis.techStackMatch,
+              aiRedFlags: analysis.redFlags,
+              aiDimensions: analysis.dimensions,
+              analyzedAt: new Date()
+            }
+          }),
+          prisma.aiAnalysisTask.update({
+            where: { id: task.id },
+            data: { status: 'completed' }
+          })
+        ]);
+      })
+    );
+
+    // 5. 处理失败任务
+    const failures = results.filter(r => r.status === 'rejected');
+    if (failures.length > 0) {
+      const failedIds = tasks.slice(results.length - failures.length).map(t => t.id);
+      await prisma.aiAnalysisTask.updateMany({
+        where: { id: { in: failedIds } },
+        data: { 
+          status: 'pending', 
+          retryCount: { increment: 1 },
+          errorMsg: 'AI analysis failed'
+        }
+      });
+    }
+
+    return Response.json({ 
+      processed: tasks.length, 
+      succeeded: tasks.length - failures.length 
+    });
+    
+  } catch (err) {
+    console.error('Worker error:', err);
+    return Response.json({ error: 'Worker crashed' }, { status: 500 });
+  }
+}
+
+三、 Harness 验证清单
+模块   验证点   测试方法
+Popup   非 Boss 页面点击按钮提示错误   在百度首页打开 Popup 点击
+Popup   本地服务未启动时显示离线状态   关闭 Next.js 后刷新 Popup
+Content Script   异步消息正确返回   DevTools Console 无 Uncaught Error
+Worker   并发控制生效   插入20条任务，观察日志每批仅5条
+Worker   失败重试机制   故意传入无效 JD，确认 retryCount 递增
+Worker   AI 结果正确写入 Job 表   查询 jobs 表 aiScore IS NOT NULL
+
+⚠️ 关键工程提醒
+
+1.  Worker 触发方式选择：
+    -   本地开发: 用 setInterval 在 Next.js 自定义 server 中触发，或单独写个 node worker.js 脚本。
+    -   Vercel 部署: 使用 Vercel Cron Jobs (vercel.json 配置)，免费额度足够个人使用。
+    -   Docker 部署: 用 node-cron 或独立进程运行 Worker。
+2.  AI 成本控制: 在 Worker 中加入全局速率限制（如每分钟最多 10 次 AI 调用），避免突发流量导致账单爆炸。
+3.  Popup 构建工具: 推荐使用 @crxjs/vite-plugin 或 plasmo 框架，它们原生支持 React/Preact + HMR，比手写 Webpack 配置高效 10 倍。
+4.  事务安全: Worker 中的“更新 Job + 更新 Task”必须在同一个 transaction 中，否则可能出现 AI 分析完成但任务状态未更新，导致重复分析浪费 Token。
+
+ 下一步建议
+
+至此，你的 MVP 核心链路已完整闭环：Popup 触发 → Content Script 提取 → API 入库 → Worker 异步 AI 分析 → Dashboard 可视化。
+
+建议按以下顺序收尾：
+1.  先用 Mock 数据跑通 Dashboard 可视化
+2.  再开发 Extension + Ingest API 联调
+3.  最后接入真实 AI 服务调试 Prompt
+
+需要我提供 Vercel Cron 配置模板、Plasmo 框架初始化指南，或者 AI 评分结果的缓存策略 吗？
+
+好的，我们进入项目的工程化收尾与生产环境部署阶段。
+
+要让这个个人工具真正稳定运行且成本可控，我们需要解决三个核心问题：插件开发体验（Plasmo）、云端定时调度（Vercel Cron）、以及AI 成本控制（语义/哈希缓存）。
+
+以下是这三个模块的完整代码级实现指南。
+
+一、 插件开发利器：Plasmo 框架初始化
+
+手写 Manifest V3 和 Webpack 配置非常痛苦且不支持热更新（HMR）。Plasmo 是目前 Chrome Extension 开发的事实标准，完美支持 React/Next.js 生态。
+
+🛠️ 1. 初始化项目
+
+# 创建 Plasmo 项目 (选择 React + TypeScript)
+npm create plasmo --@latest job-radar-extension
+cd job-radar-extension
+npm install
+
+# 安装与 Next.js 通信所需的库
+npm install zod
+
+ 2. Plasmo 目录结构规范
+
+Plasmo 采用基于文件系统的路由，不需要手动配置 manifest.json，它会自动生成。
+
+job-radar-extension/
+├── assets/             # 图标
+├── src/
+│   ├── popup.tsx       # 自动映射为 Popup 页面
+│   ├── background.ts   # Service Worker (后台脚本)
+│   └── contents/       # Content Scripts 目录
+│       └── boss-zhipin.tsx  # 注入到 Boss直聘的脚本
+├── package.json
+└── tsconfig.json
+
+ 3. Content Script 迁移 (Plasmo 规范)
+
+在 src/contents/boss-zhipin.tsx 中，使用 Plasmo 提供的  PlasmoCSConfig 导出配置：
+
+// src/contents/boss-zhipin.tsx
+import type { PlasmoCSConfig } from "plasmo"
+import { extractCurrentPageJobs, syncToNextJobs } from "@/lib/sync"
+
+// ⚠️ 关键：定义注入规则，替代 manifest.json 中的 content_scripts
+export const config: PlasmoCSConfig = {
+  matches: ["https://www.zhipin.com/*"],
+  run_at: "document_idle"
+}
+
+// 监听来自 Popup 的消息
+chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
+  if (msg.action === 'EXTRACT_AND_SYNC') {
+    (async () => {
+      try {
+        const jobs = await extractCurrentPageJobs();
+        if (jobs.length === 0) {
+          sendResponse({ success: false, error: '当前页面未检测到职位卡片' });
+          return;
+        }
+        await syncToNextJobs(jobs);
+        sendResponse({ success: true, count: jobs.length });
+      } catch (err: any) {
+        sendResponse({ success: false, error: err.message });
+      }
+    })();
+    return true; // 保持消息通道开启以支持异步响应
+  }
+});
+
+// Plasmo 要求 Content Script 默认导出一个 React 组件（如果不需要注入UI，可返回null）
+export default () => null;
+
+ 4. 开发与打包命令
+
+# 本地开发 (支持 HMR 热更新)
+npm run dev
+
+# 打包生产版本 (生成 build/chrome-mv3-prod.zip)
+npm run build
+
+二、 云端定时调度：Vercel Cron Jobs
+
+当你的 Next.js 项目部署到 Vercel 后，我们不能依赖本地的 setInterval。Vercel 提供了原生的 Cron Jobs 功能，可以定时触发我们的 AI Worker API。
+
+⚙️ 1. 配置 vercel.json
+
+在项目根目录创建 vercel.json，配置每 10 分钟触发一次 Worker：
+
+{
+  "crons": [
+    {
+      "path": "/api/workers/ai-analyze",
+      "schedule": "*/10 * * * *"
+    }
+  ]
+}
+
+ 2. 保护 Worker API 路由
+
+Vercel 的 Cron 触发时会带上特定的 Header，我们需要在 API 路由中校验，防止被外部恶意刷接口。
+
+首先，在 Vercel 项目的 Environment Variables 中添加一个环境变量：
+CRON_SECRET = your-super-secret-random-string
+
+然后，修改 Worker 路由代码：
+
+// app/api/workers/ai-analyze/route.ts
+import { NextRequest, NextResponse } from 'next/server';
+import { processAiQueue } from '@/services/ai-worker-service'; // 将之前的逻辑抽离到 service
+
+export async function GET(request: NextRequest) {
+  // 1. 校验 Vercel Cron Secret
+  const authHeader = request.headers.get('authorization');
+  if (authHeader !== `Bearer {process.env.CRON_SECRET}`) {
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  }
+
+  // 2. 执行队列处理逻辑
+  try {
+    const result = await processAiQueue();
+    return NextResponse.json(result);
+  } catch (error) {
+    console.error('Cron job failed:', error);
+    return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 });
+  }
+}
+
+// Vercel Cron 默认发 GET 请求，如果需要用 POST 可以在 vercel.json 中配置，但 GET 更常见
+export const dynamic = 'force-dynamic'; // 禁用缓存
+export const maxDuration = 60; // Vercel Hobby 计划最大执行时间 60s，Pro 计划 300s
+
+三、 AI 成本控制：JD 哈希缓存策略
+
+痛点：Boss直聘上很多岗位的 JD 是一模一样的（尤其是外包或批量发布的岗位），或者同一个岗位你第二天又刷到了。如果每次都调 AI，Token 费用会很高。
+
+解决方案：对 JD 文本进行 SHA-256 哈希，建立分析结果缓存表。
+
+️ 1. Prisma Schema 增加 Cache 表
+
+// prisma/schema.prisma 追加
+model AiAnalysisCache {
+  id          String   @id @default(cuid())
+  jdHash      String   @unique // JD 内容的 SHA-256 哈希
+  aiScore     Int
+  aiSummary   String   @db.VarChar(500)
+  aiRecommendation String
+  aiTechMatch String[]
+  aiRedFlags  String[]
+  aiDimensions Json
+  
+  hitCount    Int      @default(1) // 命中次数，用于统计
+  createdAt   DateTime @default(now())
+  
+  @@index([jdHash])
+  @@map("ai_analysis_cache")
+}
+
+🧠 2. Worker 逻辑改造 (查缓存 -> 调 AI -> 写缓存)
+
+修改 services/ai-worker-service.ts 中的核心处理逻辑：
+
+import crypto from 'crypto';
+import { analyzeJob } from './ai-job-analyzer';
+import { prisma } from '@/lib/prisma';
+
+// 计算文本哈希
+function hashText(text: string): string {
+  return crypto.createHash('sha256').update(text).digest('hex');
+}
+
+export async function processSingleTask(task: any, job: any, userProfile: any) {
+  const jdHash = hashText(job.jdContent);
+
+  // 1. 尝试命中缓存
+  const cachedResult = await prisma.aiAnalysisCache.findUnique({
+    where: { jdHash }
+  });
+
+  let analysisResult;
+
+  if (cachedResult) {
+    // ✅ 命中缓存：复用结果，增加命中计数
+    analysisResult = {
+      score: cachedResult.aiScore,
+      summary: cachedResult.aiSummary,
+      recommendation: cachedResult.aiRecommendation,
+      techStackMatch: cachedResult.aiTechMatch,
+      redFlags: cachedResult.aiRedFlags,
+      dimensions: cachedResult.aiDimensions as any
+    };
+    
+    await prisma.aiAnalysisCache.update({
+      where: { jdHash },
+      data: { hitCount: { increment: 1 } }
+    });
+    
+    console.log(`♻️ Cache hit for job: {job.title}`);
+  } else {
+    // ❌ 未命中缓存：调用 AI 并写入缓存
+    analysisResult = await analyzeJob(job.jdContent, userProfile);
+    if (!analysisResult) throw new Error('AI analysis failed');
+
+    await prisma.aiAnalysisCache.create({
+      data: {
+        jdHash,
+        aiScore: analysisResult.score,
+        aiSummary: analysisResult.summary,
+        aiRecommendation: analysisResult.recommendation,
+        aiTechMatch: analysisResult.techStackMatch,
+        aiRedFlags: analysisResult.redFlags,
+        aiDimensions: analysisResult.dimensions
+      }
+    });
+    
+    console.log(`🧠 AI analyzed and cached for job: ${job.title}`);
+  }
+
+  // 2. 将结果更新到 Job 主表
+  await prisma.job.update({
+    where: { id: job.id },
+    data: {
+      aiScore: analysisResult.score,
+      aiSummary: analysisResult.summary,
+      aiRecommendation: analysisResult.recommendation,
+      aiTechMatch: analysisResult.techStackMatch,
+      aiRedFlags: analysisResult.redFlags,
+      aiDimensions: analysisResult.dimensions,
+      analyzedAt: new Date()
+    }
+  });
+}
+
+四、 项目全局 Harness (防坑检查清单)
+
+在将项目推向生产环境前，请逐一核对以下工程规范：
+检查维度   具体检查项   状态
+安全与合规   Extension 仅请求 activeTab 和 zhipin.com 权限，无全局爬虫行为   [ ]
+安全与合规   Next.js API 均有鉴权（Local Secret 或 Vercel Cron Secret）   [ ]
+数据安全   数据库连接字符串、AI API Key 均存放在 .env.local 或 Vercel Env 中   [ ]
+成本控制   AI 调用前实现了 SHA-256 缓存拦截机制   [ ]
+稳定性   Worker 实现了 try-catch 和最大重试次数（防止死循环）   [ ]
+前端体验   收藏按钮使用了 Optimistic UI（乐观更新），无等待卡顿感   [ ]
+构建部署   npm run build 无 TypeScript 类型报错，无 ESLint 致命警告   [ ]
+
+五、 最终交付形态与使用流程
+
+至此，你的 JobRadar 已经是一个具备生产级水准的个人效率工具：
+
+1. 日常使用：用户打开 Chrome，登录 Boss直聘，浏览职位列表。
+2. 触发采集：点击浏览器右上角的 JobRadar 插件图标，点击“提取并同步”。
+3. 静默处理：插件将数据发给本地/云端 Next.js 服务，入库后 Vercel Cron 每 10 分钟自动拉起 Worker。
+4. 智能省钱：Worker 发现相同的 JD 直接走缓存，新 JD 调用 AI 生成犀利点评。
+5. 决策辅助：用户打开 Dashboard，看着 AI 评分分布图和“不推荐”的红旗标签，精准收藏高质量岗位。
+
+ 终极建议：
+如果你打算将其开源或分享给朋友使用，建议将数据库从 PostgreSQL 切换为 Turso (LibSQL) 或 Supabase，它们对 Next.js 边缘运行（Edge Runtime）支持更好，且提供免费额度，非常适合这种轻量级个人工具。
+
+祝你的 JobRadar 开发顺利！如果在这个过程中遇到具体的报错或需要优化某个组件的 UI 细节，随时来找我。

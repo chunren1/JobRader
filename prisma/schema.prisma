@@ -1,0 +1,119 @@
+// ============================================
+// JobRadar Prisma Schema
+// 数据源: PostgreSQL
+// 生成: npx prisma generate
+// 迁移: npx prisma migrate dev --name init
+// ============================================
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
+}
+
+// ============================================
+// 岗位主表
+// ============================================
+model Job {
+  id               String   @id @default(cuid())
+  title            String   @db.VarChar(255)
+  company          String   @db.VarChar(255)
+  salaryMin        Int?                               // 最低薪资 (单位: 元/月)
+  salaryMax        Int?                               // 最高薪资 (单位: 元/月)
+  location         String   @db.VarChar(100)          // 工作地点
+  jdContent        String   @db.Text                  // 职位描述原文
+  tags             String[]                           // 技能标签
+  rawUrl           String   @unique @db.VarChar(500)  // 原始链接 (去重键)
+  source           String   @default("zhipin")        // 数据来源
+
+  // AI 分析结果
+  aiScore          Int?                               // AI 综合评分 (0-100)
+  aiSummary        String?  @db.VarChar(500)          // AI 一句话总结
+  aiRecommendation String?                            // 推荐: 强烈推荐/可以考虑/不推荐
+  aiTechMatch      String[]                           // 匹配的技术栈
+  aiRedFlags       String[]                           // 潜在风险
+  aiSalaryMatch    String?                            // 薪资匹配度
+  aiDimensions     Json?                              // 多维度评分: {tech, salary, stability, growth}
+  analyzedAt       DateTime?                          // AI 分析时间
+
+  fetchedAt        DateTime @default(now())           // 采集时间
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+
+  // 关联
+  favorites        UserFavorite[]
+  analysisTask     AiAnalysisTask?
+
+  @@index([aiScore(sort: Desc)])
+  @@index([location])
+  @@index([fetchedAt(sort: Desc)])
+  @@index([createdAt(sort: Desc)])
+  @@map("jobs")
+}
+
+// ============================================
+// 用户收藏表 (支持软删除)
+// ============================================
+model UserFavorite {
+  id        String    @id @default(cuid())
+  jobId     String
+  notes     String?   @db.VarChar(500)   // 用户自定义笔记
+  tags      String[]                      // 用户自定义标签
+  deletedAt DateTime?                     // 软删除标记 (非null=已删除)
+  
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+
+  job       Job       @relation(fields: [jobId], references: [id], onDelete: Cascade)
+
+  @@index([jobId])
+  @@index([deletedAt])
+  @@index([createdAt(sort: Desc)])
+  @@map("user_favorites")
+}
+
+// ============================================
+// AI 分析任务队列表
+// ============================================
+model AiAnalysisTask {
+  id         String   @id @default(cuid())
+  jobId      String   @unique
+  status     String   @default("pending")  // pending | processing | completed | failed
+  retryCount Int      @default(0)
+  maxRetries Int      @default(3)
+  errorMsg   String?  @db.VarChar(500)
+  lockKey    String?                        // 分布式锁标识
+
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  job        Job      @relation(fields: [jobId], references: [id], onDelete: Cascade)
+
+  @@index([status, createdAt(sort: Asc)])
+  @@map("ai_analysis_tasks")
+}
+
+// ============================================
+// AI 分析结果缓存表 (JD 内容 SHA-256 哈希去重)
+// ============================================
+model AiAnalysisCache {
+  id               String   @id @default(cuid())
+  jdHash           String   @unique             // JD 内容的 SHA-256 哈希
+  aiScore          Int
+  aiSummary        String   @db.VarChar(500)
+  aiRecommendation String
+  aiTechMatch      String[]
+  aiRedFlags       String[]
+  aiSalaryMatch    String?
+  aiDimensions     Json?
+  hitCount         Int      @default(1)         // 缓存命中次数
+
+  createdAt        DateTime @default(now())
+
+  @@index([jdHash])
+  @@map("ai_analysis_cache")
+}
