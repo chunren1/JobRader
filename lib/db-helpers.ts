@@ -10,9 +10,10 @@ export const jsonArr = (arr: string[] | undefined | null): string =>
   JSON.stringify(arr ?? []);
 
 /** 反序列化 JSON 字符串 → 数组 */
-export const parseArr = (str: string | undefined | null): string[] => {
+export const parseArr = (str: unknown): string[] => {
+  if (Array.isArray(str)) return str as string[];
   try {
-    return str ? JSON.parse(str) : [];
+    return typeof str === "string" ? JSON.parse(str) : [];
   } catch {
     return [];
   }
