@@ -47,6 +47,11 @@ export async function POST(request: NextRequest) {
     if (isMD) {
       // Markdown: 直接读文本
       rawText = await file.text();
+      // 兜底：text() 可能返回空
+      if (!rawText || rawText.length < 5) {
+        const buf = Buffer.from(await file.arrayBuffer());
+        rawText = buf.toString("utf-8");
+      }
     } else {
       // PDF: 尝试提取文字
       try {
@@ -59,10 +64,10 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    if (!rawText || rawText.trim().length < 30) {
+    if (!rawText || rawText.trim().length < 10) {
       return NextResponse.json({
         success: false,
-        error: isMD ? "文件内容太短" : "PDF无法提取文字。建议将简历复制到.md文件上传，或用粘贴功能。"
+        error: `文件内容太短（${rawText?.length || 0}字符，${file.size}字节）。请确认文件包含简历内容。`
       }, { status: 400 });
     }
 
