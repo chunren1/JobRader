@@ -84,7 +84,7 @@ export default function Dashboard() {
 
   const selectAll = useCallback(() => {
     setSelectedIds(new Set(displayJobs.map(j => j.id)));
-  }, []); // eslint-disable-line
+  }, [displayJobs]);
 
   const clearSelection = useCallback(() => setSelectedIds(new Set()), []);
 
