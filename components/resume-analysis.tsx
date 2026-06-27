@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect, useCallback } from "react";
-import { Loader2, User, Briefcase, GraduationCap, Code, Star, AlertTriangle, CheckCircle2, MapPin, Mail, Phone, Calendar, ExternalLink } from "lucide-react";
+import { Loader2, User, Briefcase, GraduationCap, Code, Star, AlertTriangle, CheckCircle2, MapPin, Mail, Phone, Calendar, ExternalLink, Edit3, Save, X, Plus, Trash2, RefreshCw } from "lucide-react";
 import { cn, formatSalary } from "@/lib/utils";
 
 interface ResumeData {
@@ -27,6 +27,10 @@ interface JobMatch {
 
 export function ResumeAnalysis() {
   const [resume, setResume] = useState<ResumeData | null>(null);
+  const [editData, setEditData] = useState<ResumeData | null>(null);
+  const [isEditing, setIsEditing] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [triggeringScore, setTriggeringScore] = useState(false);
   const [jobs, setJobs] = useState<JobMatch[]>([]);
   const [loading, setLoading] = useState(true);
   const [analyzing, setAnalyzing] = useState(false);
@@ -45,7 +49,9 @@ export function ResumeAnalysis() {
         const structData = await structRes.json();
         if (structData.success) structured = structData.data;
       } catch { /* fallback */ }
-      setResume({ ...structured, summary: structured.summary || resData.data.text.substring(0, 200) });
+      const final = { ...structured, summary: structured.summary || resData.data.text.substring(0, 200) };
+      setResume(final);
+      setEditData(null);
 
       const jobRes = await fetch("/api/jobs?limit=50");
       const jobData = await jobRes.json();
@@ -60,6 +66,30 @@ export function ResumeAnalysis() {
     loadData();
     setAnalyzing(false);
   };
+
+  // 开始编辑
+  const startEdit = () => { setEditData(resume ? { ...resume, skills: [...(resume.skills || [])], experience: [...(resume.experience || [])], projects: [...(resume.projects || [])] } : {}); setIsEditing(true); };
+  const cancelEdit = () => { setEditData(null); setIsEditing(false); };
+
+  // 保存编辑并触发重评分
+  const saveEdit = async () => {
+    if (!editData) return;
+    setSaving(true);
+    try {
+      await fetch("/api/resume/structured", { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify(editData) });
+      setResume(editData);
+      setIsEditing(false);
+      setEditData(null);
+      // 触发重评分
+      setTriggeringScore(true);
+      await fetch("/api/workers/ai-analyze", { method: "POST" }).catch(() => {});
+      setTriggeringScore(false);
+      // 过一会重新加载结果
+      setTimeout(() => { loadData(); }, 5000);
+    } finally { setSaving(false); }
+  };
+
+  const data = isEditing && editData ? editData : resume;
 
   useEffect(() => { loadData(); }, [loadData]);
 
@@ -79,57 +109,108 @@ export function ResumeAnalysis() {
 
   return (
     <div>
-      <div className="flex items-center justify-between mb-6">
+      <div className="flex items-center justify-between mb-6 flex-wrap gap-3">
         <div>
           <h1 className="text-2xl font-bold tracking-tight">简历分析</h1>
           <p className="mt-1 text-sm text-muted-foreground">{jobs.length} 个已评分岗位待匹配</p>
         </div>
-        <button onClick={handleAnalyze} disabled={analyzing}
-          className="inline-flex items-center gap-2 rounded-lg bg-primary px-4 py-2 text-sm font-medium text-primary-foreground hover:bg-primary/90 disabled:opacity-50">
-          {analyzing ? <Loader2 className="h-4 w-4 animate-spin" /> : <Star className="h-4 w-4" />}重新解析
-        </button>
+        <div className="flex items-center gap-2">
+          {!isEditing ? (
+            <>
+              <button onClick={startEdit} className="inline-flex items-center gap-2 rounded-lg border px-4 py-2 text-sm font-medium hover:bg-secondary transition-colors">
+                <Edit3 className="h-4 w-4" />编辑
+              </button>
+              <button onClick={handleAnalyze} disabled={analyzing}
+                className="inline-flex items-center gap-2 rounded-lg bg-primary px-4 py-2 text-sm font-medium text-primary-foreground hover:bg-primary/90 disabled:opacity-50">
+                {analyzing ? <Loader2 className="h-4 w-4 animate-spin" /> : <Star className="h-4 w-4" />}重新解析
+              </button>
+            </>
+          ) : (
+            <>
+              <button onClick={cancelEdit} className="inline-flex items-center gap-2 rounded-lg border px-4 py-2 text-sm font-medium hover:bg-secondary transition-colors">
+                <X className="h-4 w-4" />取消
+              </button>
+              <button onClick={saveEdit} disabled={saving}
+                className="inline-flex items-center gap-2 rounded-lg bg-primary px-4 py-2 text-sm font-medium text-primary-foreground hover:bg-primary/90 disabled:opacity-50">
+                {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}保存并重评分
+              </button>
+            </>
+          )}
+          {triggeringScore && (
+            <span className="inline-flex items-center gap-1 text-xs text-primary"><RefreshCw className="h-3 w-3 animate-spin" />重评分中...</span>
+          )}
+        </div>
       </div>
 
       <div className="grid gap-6 lg:grid-cols-5">
         {/* Left: Resume */}
         <div className="lg:col-span-2 space-y-4">
           <SectionCard icon={<User className="h-5 w-5" />} title="个人信息">
-            <div className="space-y-2">
-              <div className="text-xl font-bold">{resume?.name || "未解析"}</div>
-              {resume?.title && <div className="text-primary font-medium">{resume.title}</div>}
-              <div className="flex flex-wrap gap-x-4 gap-y-1 text-sm text-muted-foreground">
-                {resume?.email && <span className="inline-flex items-center gap-1"><Mail className="h-3 w-3" />{resume.email}</span>}
-                {resume?.phone && <span className="inline-flex items-center gap-1"><Phone className="h-3 w-3" />{resume.phone}</span>}
-                {resume?.city && <span className="inline-flex items-center gap-1"><MapPin className="h-3 w-3" />{resume.city}</span>}
-                {resume?.yearsOfExp && <span className="inline-flex items-center gap-1"><Calendar className="h-3 w-3" />{resume.yearsOfExp}</span>}
+            {isEditing ? (
+              <div className="space-y-2">
+                <Field label="姓名" value={data?.name} onChange={v => setEditData(d => d ? { ...d, name: v } : d)} />
+                <Field label="求职方向" value={data?.title} onChange={v => setEditData(d => d ? { ...d, title: v } : d)} />
+                <div className="grid grid-cols-2 gap-2">
+                  <Field label="邮箱" value={data?.email} onChange={v => setEditData(d => d ? { ...d, email: v } : d)} />
+                  <Field label="电话" value={data?.phone} onChange={v => setEditData(d => d ? { ...d, phone: v } : d)} />
+                </div>
+                <div className="grid grid-cols-2 gap-2">
+                  <Field label="城市" value={data?.city} onChange={v => setEditData(d => d ? { ...d, city: v } : d)} />
+                  <Field label="工作年限" value={data?.yearsOfExp} onChange={v => setEditData(d => d ? { ...d, yearsOfExp: v } : d)} />
+                </div>
               </div>
-            </div>
+            ) : (
+              <div className="space-y-2">
+                <div className="text-xl font-bold">{data?.name || "未解析"}</div>
+                {data?.title && <div className="text-primary font-medium">{data.title}</div>}
+                <div className="flex flex-wrap gap-x-4 gap-y-1 text-sm text-muted-foreground">
+                  {data?.email && <span className="inline-flex items-center gap-1"><Mail className="h-3 w-3" />{data.email}</span>}
+                  {data?.phone && <span className="inline-flex items-center gap-1"><Phone className="h-3 w-3" />{data.phone}</span>}
+                  {data?.city && <span className="inline-flex items-center gap-1"><MapPin className="h-3 w-3" />{data.city}</span>}
+                  {data?.yearsOfExp && <span className="inline-flex items-center gap-1"><Calendar className="h-3 w-3" />{data.yearsOfExp}</span>}
+                </div>
+              </div>
+            )}
           </SectionCard>
 
-          {resume?.education && (
+          {/* Education */}
+          {data?.education && (
             <SectionCard icon={<GraduationCap className="h-5 w-5" />} title="教育背景">
-              <div className="space-y-1 text-sm">
-                <div className="font-medium">{resume.education.school}</div>
-                <div className="text-muted-foreground">{resume.education.degree} · {resume.education.major}</div>
-                <div className="text-xs text-muted-foreground">{resume.education.year}</div>
-              </div>
+              {isEditing ? (
+                <div className="grid grid-cols-2 gap-2">
+                  <Field label="学校" value={data.education.school} onChange={v => setEditData(d => d ? { ...d, education: { ...d.education!, school: v } } : d)} />
+                  <Field label="学历" value={data.education.degree} onChange={v => setEditData(d => d ? { ...d, education: { ...d.education!, degree: v } } : d)} />
+                  <Field label="专业" value={data.education.major} onChange={v => setEditData(d => d ? { ...d, education: { ...d.education!, major: v } } : d)} />
+                  <Field label="毕业年份" value={data.education.year} onChange={v => setEditData(d => d ? { ...d, education: { ...d.education!, year: v } } : d)} />
+                </div>
+              ) : (
+                <div className="space-y-1 text-sm">
+                  <div className="font-medium">{data.education.school}</div>
+                  <div className="text-muted-foreground">{data.education.degree} · {data.education.major}</div>
+                  <div className="text-xs text-muted-foreground">{data.education.year}</div>
+                </div>
+              )}
             </SectionCard>
           )}
 
-          {resume?.skills && resume.skills.length > 0 && (
-            <SectionCard icon={<Code className="h-5 w-5" />} title="技能">
+          {/* Skills */}
+          <SectionCard icon={<Code className="h-5 w-5" />} title={
+            <span className="flex items-center gap-2">技能{isEditing && <EditableList label="技能" items={data?.skills || []} onChange={v => setEditData(d => d ? { ...d, skills: v } : d)} />}</span>
+          }>
+            {isEditing ? <EditableList label="" items={data?.skills || []} onChange={v => setEditData(d => d ? { ...d, skills: v } : d)} /> : (
               <div className="flex flex-wrap gap-1.5">
-                {resume.skills.map(s => (
-                  <span key={s} className="rounded-md bg-primary/10 px-2.5 py-1 text-xs font-medium text-primary">{s}</span>
-                ))}
+                {data?.skills?.map(s => <span key={s} className="rounded-md bg-primary/10 px-2.5 py-1 text-xs font-medium text-primary">{s}</span>)}
               </div>
-            </SectionCard>
-          )}
+            )}
+          </SectionCard>
 
-          {resume?.experience && resume.experience.length > 0 && (
-            <SectionCard icon={<Briefcase className="h-5 w-5" />} title="工作经历">
+          {/* Experience */}
+          <SectionCard icon={<Briefcase className="h-5 w-5" />} title="工作经历">
+            {isEditing ? (
+              <EditableExperiences items={data?.experience || []} onChange={v => setEditData(d => d ? { ...d, experience: v } : d)} />
+            ) : (
               <div className="space-y-3">
-                {resume.experience.map((exp, i) => (
+                {data?.experience?.map((exp, i) => (
                   <div key={i} className="border-l-2 border-muted pl-3 text-sm">
                     <div className="font-medium">{exp.role}</div>
                     <div className="text-muted-foreground">{exp.company} · {exp.duration}</div>
@@ -137,24 +218,25 @@ export function ResumeAnalysis() {
                   </div>
                 ))}
               </div>
-            </SectionCard>
-          )}
+            )}
+          </SectionCard>
 
-          {resume?.projects && resume.projects.length > 0 && (
-            <SectionCard icon={<Star className="h-5 w-5" />} title="项目经验">
+          {/* Projects */}
+          <SectionCard icon={<Star className="h-5 w-5" />} title="项目经验">
+            {isEditing ? (
+              <EditableProjects items={data?.projects || []} onChange={v => setEditData(d => d ? { ...d, projects: v } : d)} />
+            ) : (
               <div className="space-y-3">
-                {resume.projects.map((p, i) => (
+                {data?.projects?.map((p, i) => (
                   <div key={i} className="border-l-2 border-primary/30 pl-3 text-sm">
                     <div className="font-medium">{p.name}</div>
                     <div className="text-xs text-muted-foreground">{p.role}</div>
-                    <div className="flex flex-wrap gap-1 mt-1">
-                      {p.tech.map(t => <span key={t} className="rounded bg-muted px-1.5 py-0.5 text-[10px]">{t}</span>)}
-                    </div>
+                    <div className="flex flex-wrap gap-1 mt-1">{p.tech?.map(t => <span key={t} className="rounded bg-muted px-1.5 py-0.5 text-[10px]">{t}</span>)}</div>
                   </div>
                 ))}
               </div>
-            </SectionCard>
-          )}
+            )}
+          </SectionCard>
         </div>
 
         {/* Right: Job Match */}
@@ -243,6 +325,85 @@ function JobMatchCard({ job }: { job: JobMatch }) {
   );
 }
 
-function SectionCard({ icon, title, children }: { icon: React.ReactNode; title: string; children: React.ReactNode }) {
+function SectionCard({ icon, title, children }: { icon: React.ReactNode; title: React.ReactNode; children: React.ReactNode }) {
   return <div className="rounded-xl border bg-card p-4"><div className="flex items-center gap-2 mb-3 text-sm font-semibold text-muted-foreground">{icon}{title}</div>{children}</div>;
+}
+
+// 单行编辑字段
+function Field({ label, value, onChange }: { label: string; value?: string; onChange: (v: string) => void }) {
+  return (
+    <div>
+      <label className="text-[10px] text-muted-foreground">{label}</label>
+      <input value={value || ""} onChange={e => onChange(e.target.value)}
+        className="w-full mt-0.5 rounded-md border px-2 py-1 text-xs focus:outline-none focus:border-primary" />
+    </div>
+  );
+}
+
+// 可编辑技能标签
+function EditableList({ label, items, onChange }: { label: string; items: string[]; onChange: (v: string[]) => void }) {
+  const [input, setInput] = useState("");
+  const add = () => {
+    const v = input.trim();
+    if (v && !items.includes(v)) { onChange([...items, v]); setInput(""); }
+  };
+  return (
+    <div className="w-full space-y-2">
+      <div className="flex flex-wrap gap-1.5">
+        {items.map((s, i) => (
+          <span key={s} className="inline-flex items-center gap-1 rounded-md bg-primary/10 px-2 py-0.5 text-xs text-primary">
+            {s}
+            <button onClick={() => onChange(items.filter((_, j) => j !== i))} className="hover:text-red-500"><X className="h-3 w-3" /></button>
+          </span>
+        ))}
+      </div>
+      <div className="flex gap-1">
+        <input value={input} onChange={e => setInput(e.target.value)} onKeyDown={e => e.key === "Enter" && (e.preventDefault(), add())}
+          placeholder={label || "添加技能..."} className="flex-1 rounded-md border px-2 py-1 text-xs focus:outline-none focus:border-primary" />
+        <button onClick={add} className="rounded-md border px-2 py-1 text-xs hover:bg-secondary"><Plus className="h-3 w-3" /></button>
+      </div>
+    </div>
+  );
+}
+
+// 可编辑工作经历
+function EditableExperiences({ items, onChange }: { items: { company: string; role: string; duration: string; summary: string }[]; onChange: (v: any[]) => void }) {
+  return (
+    <div className="space-y-3">
+      {items.map((exp, i) => (
+        <div key={i} className="border rounded-lg p-3 space-y-2 relative">
+          <button onClick={() => onChange(items.filter((_, j) => j !== i))} className="absolute top-2 right-2 text-muted-foreground hover:text-red-500"><Trash2 className="h-3 w-3" /></button>
+          <div className="grid grid-cols-2 gap-2">
+            <Field label="公司" value={exp.company} onChange={v => { const n = [...items]; n[i] = { ...n[i], company: v }; onChange(n); }} />
+            <Field label="岗位" value={exp.role} onChange={v => { const n = [...items]; n[i] = { ...n[i], role: v }; onChange(n); }} />
+          </div>
+          <Field label="时间段" value={exp.duration} onChange={v => { const n = [...items]; n[i] = { ...n[i], duration: v }; onChange(n); }} />
+          <Field label="简述" value={exp.summary} onChange={v => { const n = [...items]; n[i] = { ...n[i], summary: v }; onChange(n); }} />
+        </div>
+      ))}
+      <button onClick={() => onChange([...items, { company: "", role: "", duration: "", summary: "" }])}
+        className="flex items-center gap-1 text-xs text-primary hover:underline"><Plus className="h-3 w-3" />添加经历</button>
+    </div>
+  );
+}
+
+// 可编辑项目经验
+function EditableProjects({ items, onChange }: { items: { name: string; role: string; tech: string[]; summary: string }[]; onChange: (v: any[]) => void }) {
+  return (
+    <div className="space-y-3">
+      {items.map((p, i) => (
+        <div key={i} className="border rounded-lg p-3 space-y-2 relative">
+          <button onClick={() => onChange(items.filter((_, j) => j !== i))} className="absolute top-2 right-2 text-muted-foreground hover:text-red-500"><Trash2 className="h-3 w-3" /></button>
+          <div className="grid grid-cols-2 gap-2">
+            <Field label="项目名" value={p.name} onChange={v => { const n = [...items]; n[i] = { ...n[i], name: v }; onChange(n); }} />
+            <Field label="角色" value={p.role} onChange={v => { const n = [...items]; n[i] = { ...n[i], role: v }; onChange(n); }} />
+          </div>
+          <Field label="技术栈(逗号分隔)" value={p.tech?.join(", ")} onChange={v => { const n = [...items]; n[i] = { ...n[i], tech: v.split(",").map(t => t.trim()).filter(Boolean) }; onChange(n); }} />
+          <Field label="简述" value={p.summary} onChange={v => { const n = [...items]; n[i] = { ...n[i], summary: v }; onChange(n); }} />
+        </div>
+      ))}
+      <button onClick={() => onChange([...items, { name: "", role: "", tech: [], summary: "" }])}
+        className="flex items-center gap-1 text-xs text-primary hover:underline"><Plus className="h-3 w-3" />添加项目</button>
+    </div>
+  );
 }
