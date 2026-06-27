@@ -4,9 +4,10 @@ import { analyzeJob } from "./ai-job-analyzer";
 import { jsonArr, jsonObj } from "@/lib/db-helpers";
 import type { AiAnalysisTask, Job } from "@prisma/client";
 
-const BATCH_SIZE = 10;
+const BATCH_SIZE = 5;
+const CONCURRENCY = 3; // 并行处理数
 const MAX_RETRIES = 3;
-const LOCK_DURATION_MS = 5 * 60 * 1000; // 5 分钟锁过期时间
+const LOCK_DURATION_MS = 5 * 60 * 1000;
 
 /**
  * 计算 JD 文本的 SHA-256 哈希
@@ -27,27 +28,6 @@ function getUserProfile() {
     expectedSalary:
       process.env.USER_EXPECTED_SALARY || "25-45K",
   };
-}
-
-/**
- * 简单锁机制：防止多 Worker 实例重复消费
- */
-async function acquireLock(taskId: string): Promise<boolean> {
-  const lockKey = `worker_${Date.now()}_${Math.random().toString(36).slice(2)}`;
-
-  const result = await prisma.aiAnalysisTask.updateMany({
-    where: {
-      id: taskId,
-      status: "pending",
-    },
-    data: {
-      status: "processing",
-      lockKey,
-      updatedAt: new Date(),
-    },
-  });
-
-  return result.count > 0;
 }
 
 /**
@@ -147,6 +127,26 @@ async function processSingleTask(
  * 
  * 流程：获取 pending 任务 → 加锁 → 并行处理 → 成功/失败处理
  */
+async function processOneTask(task: AiAnalysisTask): Promise<{ success: boolean; cached: boolean }> {
+  const job = await prisma.job.findUnique({ where: { id: task.jobId } });
+  if (!job) {
+    await prisma.aiAnalysisTask.update({ where: { id: task.id }, data: { status: "failed", errorMsg: "Job not found" } });
+    return { success: false, cached: false };
+  }
+  try {
+    const result = await processSingleTask(task, job);
+    return { success: true, cached: result.cached };
+  } catch (error) {
+    const updatedTask = await prisma.aiAnalysisTask.findUnique({ where: { id: task.id } });
+    if (updatedTask && updatedTask.retryCount + 1 >= MAX_RETRIES) {
+      await prisma.aiAnalysisTask.update({ where: { id: task.id }, data: { status: "failed", errorMsg: error instanceof Error ? error.message.substring(0, 500) : "Max retries exceeded", lockKey: null } });
+    } else {
+      await prisma.aiAnalysisTask.update({ where: { id: task.id }, data: { status: "pending", retryCount: { increment: 1 }, errorMsg: error instanceof Error ? error.message.substring(0, 500) : "Unknown error", lockKey: null } });
+    }
+    return { success: false, cached: false };
+  }
+}
+
 export async function processAiQueue(): Promise<{
   processed: number;
   succeeded: number;
@@ -155,60 +155,46 @@ export async function processAiQueue(): Promise<{
 }> {
   let totalProcessed = 0, totalSucceeded = 0, totalCached = 0, totalFailed = 0;
 
-  // 循环处理直到所有 pending 任务完成
   while (true) {
+    // 先清除卡住的 processing 锁
+    await releaseStaleLocks();
+
     const tasks = await prisma.aiAnalysisTask.findMany({
-      where: {
-        status: "pending",
-        retryCount: { lt: MAX_RETRIES },
-      },
+      where: { status: "pending", retryCount: { lt: MAX_RETRIES } },
       orderBy: { createdAt: "asc" },
       take: BATCH_SIZE,
     });
 
     if (tasks.length === 0) {
-      console.log(`🔧 AI Worker: All done — ${totalSucceeded} succeeded (${totalCached} cached), ${totalFailed} failed`);
+      console.log(`🔧 AI Worker: All done — ${totalSucceeded} succeeded (${totalCached} cached)`);
       break;
     }
 
-    console.log(`🔧 AI Worker: Processing ${tasks.length} tasks...`);
+    // 标记为 processing
+    await prisma.aiAnalysisTask.updateMany({
+      where: { id: { in: tasks.map(t => t.id) } },
+      data: { status: "processing" },
+    });
 
-    for (const task of tasks) {
-      const locked = await acquireLock(task.id);
-      if (!locked) continue;
-
-      try {
-        const job = await prisma.job.findUnique({ where: { id: task.jobId } });
-        if (!job) {
-          await prisma.aiAnalysisTask.update({
-            where: { id: task.id },
-            data: { status: "failed", errorMsg: "Job not found" },
-          });
-          totalFailed++;
-          continue;
-        }
-
-        const result = await processSingleTask(task, job);
-        totalSucceeded++;
-        if (result.cached) totalCached++;
-      } catch (error) {
-        const updatedTask = await prisma.aiAnalysisTask.findUnique({ where: { id: task.id } });
-        if (updatedTask && updatedTask.retryCount + 1 >= MAX_RETRIES) {
-          await prisma.aiAnalysisTask.update({
-            where: { id: task.id },
-            data: { status: "failed", errorMsg: error instanceof Error ? error.message.substring(0, 500) : "Max retries exceeded", lockKey: null },
-          });
+    // 并行处理
+    let batch = [];
+    for (let i = 0; i < tasks.length; i += CONCURRENCY) {
+      const chunk = tasks.slice(i, i + CONCURRENCY);
+      batch = [];
+      for (const t of chunk) batch.push(processOneTask(t));
+      const results = await Promise.allSettled(batch);
+      results.forEach((r, j) => {
+        if (r.status === "fulfilled" && r.value.success) {
+          totalSucceeded++;
+          if (r.value.cached) totalCached++;
         } else {
-          await prisma.aiAnalysisTask.update({
-            where: { id: task.id },
-            data: { status: "pending", retryCount: { increment: 1 }, errorMsg: error instanceof Error ? error.message.substring(0, 500) : "Unknown error", lockKey: null },
-          });
+          totalFailed++;
         }
-        totalFailed++;
-      }
+      });
+      totalProcessed += chunk.length;
     }
 
-    totalProcessed += tasks.length;
+    console.log(`🔧 AI Worker: Batch done — ${totalSucceeded} ok, ${totalFailed} fail`);
   }
 
   return { processed: totalProcessed, succeeded: totalSucceeded, cached: totalCached, failed: totalFailed };
