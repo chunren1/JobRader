@@ -91,7 +91,7 @@ function extractJobs() {
     if (!result.title || result.title.length < 4) {
       result.title = getTitleFromPage();
     }
-    if (!result.title) continue; // 用 continue 跳过 forEach
+    if (!result.title) return; // forEach 里用 return 跳过
 
     // 如果没有公司，尝试独立提取
     if (!result.company) {
