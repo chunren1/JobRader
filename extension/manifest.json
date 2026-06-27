@@ -1,0 +1,23 @@
+{
+  "manifest_version": 3,
+  "name": "JobRadar",
+  "version": "1.0.0",
+  "description": "个人效率工具 - 岗位信息智能管理助手",
+  "action": {
+    "default_popup": "popup.html",
+    "default_title": "JobRadar"
+  },
+  "permissions": ["activeTab", "storage"],
+  "host_permissions": ["https://www.zhipin.com/*"],
+  "background": {
+    "service_worker": "background.js"
+  },
+  "content_scripts": [
+    {
+      "matches": ["https://www.zhipin.com/*"],
+      "js": ["content-script.js"],
+      "run_at": "document_idle"
+    }
+  ],
+  "icons": {}
+}

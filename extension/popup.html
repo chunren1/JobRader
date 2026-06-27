@@ -1,0 +1,59 @@
+&lt;!DOCTYPE html&gt;
+&lt;html&gt;
+&lt;head&gt;
+  &lt;meta charset="utf-8"&gt;
+  &lt;style&gt;
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body { width: 320px; padding: 16px; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; font-size: 13px; }
+    .header { display: flex; align-items: center; gap: 10px; margin-bottom: 16px; }
+    .logo { width: 32px; height: 32px; background: #3B82F6; border-radius: 8px; display: flex; align-items: center; justify-content: center; color: white; font-weight: bold; font-size: 16px; }
+    .title { font-size: 15px; font-weight: 700; color: #1F2937; }
+    .subtitle { font-size: 11px; color: #9CA3AF; }
+    .status-box { background: #F9FAFB; border-radius: 8px; padding: 10px; margin-bottom: 12px; font-size: 12px; }
+    .status-dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; margin-right: 6px; }
+    .dot-green { background: #10B981; }
+    .dot-red { background: #EF4444; }
+    .dot-yellow { background: #F59E0B; animation: pulse 1.5s infinite; }
+    .dot-blue { background: #3B82F6; animation: pulse 1.5s infinite; }
+    @keyframes pulse { 0%,100% { opacity: 1; } 50% { opacity: 0.3; } }
+    .btn { width: 100%; padding: 10px; border: none; border-radius: 8px; font-size: 13px; font-weight: 500; cursor: pointer; transition: all 0.15s; }
+    .btn-primary { background: #3B82F6; color: white; }
+    .btn-primary:hover:not(:disabled) { background: #2563EB; }
+    .btn-primary:disabled { background: #93C5FD; cursor: not-allowed; }
+    .btn-secondary { background: white; color: #374151; border: 1px solid #D1D5DB; margin-top: 6px; }
+    .btn-secondary:hover { background: #F9FAFB; }
+    .hint { background: #FFFBEB; border: 1px solid #FDE68A; border-radius: 8px; padding: 10px; font-size: 11px; color: #92400E; margin-top: 12px; }
+    .hint code { background: #FEF3C7; padding: 2px 6px; border-radius: 4px; font-size: 11px; display: block; margin: 4px 0; }
+    .footer { text-align: center; font-size: 10px; color: #D1D5DB; margin-top: 12px; }
+    .detail { color: #6B7280; font-size: 11px; margin-top: 4px; }
+  &lt;/style&gt;
+&lt;/head&gt;
+&lt;body&gt;
+  &lt;div class="header"&gt;
+    &lt;div class="logo"&gt;JR&lt;/div&gt;
+    &lt;div&gt;
+      &lt;div class="title"&gt;JobRadar&lt;/div&gt;
+      &lt;div class="subtitle"&gt;个人效率助手&lt;/div&gt;
+    &lt;/div&gt;
+  &lt;/div&gt;
+
+  &lt;div class="status-box" id="statusBox"&gt;
+    &lt;span class="status-dot dot-yellow" id="statusDot"&gt;&lt;/span&gt;
+    &lt;span id="statusText"&gt;检查服务状态...&lt;/span&gt;
+    &lt;div class="detail" id="statusDetail"&gt;&lt;/div&gt;
+  &lt;/div&gt;
+
+  &lt;button class="btn btn-primary" id="extractBtn" disabled&gt;提取并同步当前页面&lt;/button&gt;
+  &lt;button class="btn btn-secondary" id="dashboardBtn"&gt;打开岗位看板&lt;/button&gt;
+
+  &lt;div class="hint" id="hintBox" style="display:none"&gt;
+    &lt;div&gt;💡 如何启动本地服务？&lt;/div&gt;
+    &lt;code&gt;cd job-radar &amp;&amp; npm run dev&lt;/code&gt;
+    &lt;div&gt;服务启动后运行在 localhost:3000&lt;/div&gt;
+  &lt;/div&gt;
+
+  &lt;div class="footer"&gt;仅当前页面手动触发 · 数据仅存储于本地&lt;/div&gt;
+
+  &lt;script src="popup.js"&gt;&lt;/script&gt;
+&lt;/body&gt;
+&lt;/html&gt;
