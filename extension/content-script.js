@@ -78,11 +78,15 @@ function extractJobs() {
   var jobs = [];
   var seen = {};
 
-  // 策略: 找到所有包含链接的卡片型元素
+  // 策略: 找到所有包含岗位链接的元素
   var allLinks = document.querySelectorAll("a[href]");
+  console.log("[JobRadar] Found " + allLinks.length + " links on page");
+
   allLinks.forEach(function(link) {
     var href = link.href || link.getAttribute("href") || "";
-    if (!href || !href.includes("job_detail")) return;
+    // 更宽松的匹配: job_detail, job/, web/geek/job 等都算
+    if (!href || href === "#" || href.startsWith("javascript")) return;
+    if (href.length < 20) return; // 太短的链接不是岗位
     if (seen[href]) return;
     seen[href] = true;
 
@@ -238,11 +242,18 @@ chrome.runtime.onMessage.addListener(function (msg, sender, sendResponse) {
   }
 
   if (msg.action === "CHECK_PAGE") {
-    var cards = document.querySelectorAll("a[href*='job_detail']");
+    // 宽松检测：找所有合理的岗位链接
+    var links = document.querySelectorAll("a[href]");
+    var count = 0;
+    links.forEach(function(l) {
+      var h = l.href || l.getAttribute("href") || "";
+      if (h && h !== "#" && !h.startsWith("javascript") && h.length > 20) count++;
+    });
     sendResponse({
       success: true,
-      isListPage: cards.length >= 3,
-      isDetailPage: window.location.href.indexOf("job_detail") !== -1,
+      isListPage: count >= 3,
+      isDetailPage: false,
+      linkCount: count,
       title: document.title,
       url: window.location.href,
     });

@@ -40,6 +40,12 @@ btn.addEventListener("click", async function () {
       throw new Error("请在职位列表页使用此工具");
     }
 
+    // 先检查页面是否有岗位链接
+    var check = await chrome.tabs.sendMessage(tab.id, { action: "CHECK_PAGE" });
+    if (check && check.linkCount < 3) {
+      throw new Error("当前页面岗位链接不足（找到 " + (check.linkCount || 0) + " 个），请打开职位搜索/列表页");
+    }
+
     var response = await chrome.tabs.sendMessage(tab.id, { action: "EXTRACT_AND_SYNC" });
 
     if (response && response.success) {
