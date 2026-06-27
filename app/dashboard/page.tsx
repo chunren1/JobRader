@@ -8,6 +8,7 @@ import { useJobs, useToggleFavorite, type JobData } from "@/lib/hooks/use-jobs";
 import { JobCard } from "@/components/job-card";
 import { FilterBar } from "@/components/filter-bar";
 import { AnalyticsCharts } from "@/components/analytics-charts";
+import { ResumeAnalysis } from "@/components/resume-analysis";
 import { Pagination } from "@/components/pagination";
 
 export default function Dashboard() {
@@ -27,7 +28,7 @@ export default function Dashboard() {
   const [favoritedIds, setFavoritedIds] = useState<Set<string>>(new Set());
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [batchDeleting, setBatchDeleting] = useState(false);
-  const [viewMode, setViewMode] = useState<"all" | "favorites" | "analytics">("all");
+  const [viewMode, setViewMode] = useState<"all" | "favorites" | "analytics" | "resume">("all");
   const [resumeText, setResumeText] = useState<string | null>(null);
   const [resumeUploading, setResumeUploading] = useState(false);
 
@@ -197,6 +198,19 @@ export default function Dashboard() {
               </button>
 
               <button
+                onClick={() => setViewMode("resume")}
+                className={cn(
+                  "flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-colors",
+                  viewMode === "resume"
+                    ? "bg-primary text-primary-foreground"
+                    : "text-muted-foreground hover:bg-secondary hover:text-foreground"
+                )}
+              >
+                <User className="h-4 w-4" />
+                简历分析
+              </button>
+
+              <button
                 onClick={() => setViewMode("analytics")}
                 className={cn(
                   "flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-colors",
@@ -230,13 +244,6 @@ export default function Dashboard() {
 
             {/* Quick Actions */}
             <div className="mt-6 space-y-2">
-              <Link
-                href="/resume"
-                className="flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground"
-              >
-                <User className="h-4 w-4" />
-                简历分析
-              </Link>
               <button
                 onClick={refetch}
                 className="flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground"
@@ -294,6 +301,7 @@ export default function Dashboard() {
               <h1 className="text-2xl font-bold tracking-tight">
                 {viewMode === "favorites" && "我的收藏"}
                 {viewMode === "analytics" && "数据分析"}
+                {viewMode === "resume" && "简历分析"}
                 {viewMode === "all" && "岗位看板"}
               </h1>
               <p className="mt-1 text-sm text-muted-foreground">
@@ -317,7 +325,9 @@ export default function Dashboard() {
             )}
 
             {/* Analytics Section */}
-            {/* Analytics View */}
+            {/* Non-list views */}
+            {viewMode === "resume" && <div className="animate-fade-in"><ResumeAnalysis /></div>}
+
             {viewMode === "analytics" && (
               <div className="animate-fade-in">
                 {loading ? (
