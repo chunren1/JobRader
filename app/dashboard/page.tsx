@@ -55,6 +55,22 @@ export default function Dashboard() {
     }
   }, []);
 
+  // 粘贴简历文本
+  const handlePasteResume = useCallback(async () => {
+    const text = prompt("请在下方粘贴简历内容：", "");
+    if (!text || text.trim().length < 30) return;
+    try {
+      const res = await fetch("/api/resume", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ text }),
+      });
+      const data = await res.json();
+      if (data.success) setResumeText(data.data.text);
+      else alert("保存失败");
+    } catch { alert("保存失败"); }
+  }, []);
+
   // 清除简历
   const handleClearResume = useCallback(async () => {
     await fetch("/api/resume", { method: "DELETE" }).catch(() => {});
@@ -229,9 +245,18 @@ export default function Dashboard() {
                 <svg className="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                   <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/>
                 </svg>
-                {resumeUploading ? "上传中..." : resumeText ? "简历已上传 ✓" : "上传简历 (PDF)"}
+                {resumeUploading ? "上传中..." : resumeText ? "简历已加载 ✓" : "上传简历 (PDF)"}
                 <input type="file" accept=".pdf" onChange={handleResumeUpload} className="hidden" disabled={resumeUploading} />
               </label>
+              <button
+                onClick={handlePasteResume}
+                className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-xs text-muted-foreground hover:bg-secondary hover:text-foreground transition-colors"
+              >
+                <svg className="h-3.5 w-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                  <rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/>
+                </svg>
+                粘贴简历文本
+              </button>
               {resumeText && (
                 <button onClick={handleClearResume} className="w-full text-left rounded-lg px-3 py-1.5 text-xs text-red-400 hover:bg-red-50 hover:text-red-600 transition-colors">清除简历</button>
               )}
