@@ -48,18 +48,78 @@ function parseSalary(rawText) {
 }
 
 // ============================================
-// 岗位提取 - 宽松版
+// 岗位提取 - 区分列表页和详情页
 // ============================================
 function extractJobs() {
+  // 检测页面类型
+  var isDetail = window.location.href.indexOf("job_detail") !== -1 ||
+                 document.querySelectorAll("h1, h2").length <= 3;
+
+  if (isDetail) {
+    // 详情页：只提取一个岗位，从页面级元素获取
+    var job = extractFromDetailPage();
+    return job ? [job] : [];
+  }
+
+  // 列表页：扫描卡片容器
+  return extractFromListPage();
+}
+
+// 详情页提取
+function extractFromDetailPage() {
+  var title = getTitleFromPage();
+  if (!title) return null;
+
+  var companyEl = document.querySelector("[class*='company'], [class*='cname'], .name a, [class*='employer']");
+  var company = companyEl ? cleanText(companyEl.innerText || companyEl.textContent) : "未知";
+
+  var salEl = document.querySelector("[class*='salary'], [class*='pay'], [class*='price'], .red");
+  var salText = salEl ? cleanText(salEl.innerText || salEl.textContent) : "";
+  var salary = parseSalary(salText);
+
+  var locEl = document.querySelector("[class*='area'], [class*='location'], [class*='addr']");
+  var location = locEl ? cleanText(locEl.innerText || locEl.textContent) : "未知";
+  if (location === "未知") {
+    var m = document.body.innerText.match(/北京|上海|广州|深圳|杭州|成都|武汉|南京|西安|厦门/);
+    if (m) location = m[0];
+  }
+
+  // JD 描述
+  var jdEl = document.querySelector("[class*='job-detail'], [class*='jobDetail'], [class*='job-sec'], [class*='detail'], [class*='description'], [class*='content']");
+  var jd = jdEl ? cleanText(jdEl.innerText || jdEl.textContent) : "";
+  if (!jd || jd.length < 30) {
+    // 取页面 body 中较长的文本块
+    var bodyText = document.body.innerText.replace(/\s+/g, " ").trim();
+    jd = bodyText.length > 200 ? bodyText.substring(0, 2000) : bodyText;
+  }
+
+  var tags = [];
+  document.querySelectorAll("[class*='tag'], [class*='skill'], [class*='label']").forEach(function(el) {
+    var t = cleanText(el.innerText || el.textContent);
+    if (t && t.length < 15 && tags.indexOf(t) === -1) tags.push(t);
+  });
+
+  return {
+    title: cleanTitle(title),
+    company: company,
+    salaryMin: salary.min, salaryMax: salary.max,
+    location: location,
+    jdContent: jd,
+    tags: tags,
+    rawUrl: window.location.href,
+    source: "platform"
+  };
+}
+
+// 列表页提取
+function extractFromListPage() {
   var jobs = [];
   var seen = {};
 
-  // 找所有可能包含岗位描述的容器
   var containers = [];
   var cards = document.querySelectorAll("li, [class*='job'], [class*='card'], [class*='item'], [class*='list'] > *");
   cards.forEach(function(c) {
     var txt = (c.innerText || c.textContent || "").trim();
-    // 至少20个字符的文本，且包含薪资或城市特征
     if (txt.length > 20 && (txt.match(/\d+[kK]/) || txt.match(/北京|上海|广州|深圳|杭州/))) {
       containers.push(c);
     }
