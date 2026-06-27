@@ -39,13 +39,17 @@ export async function POST(request: NextRequest) {
       const buffer = Buffer.from(await file.arrayBuffer());
       const data = await pdfParse(buffer);
       rawText = data.text;
-    } catch (e) {
-      // pdf-parse 失败时直接存文件名（可手动粘贴内容）
-      rawText = `[PDF解析失败，请手动粘贴简历内容]`;
+    } catch (e: any) {
+      console.error("PDF parse failed:", e?.message || e);
+      // 图片扫描型 PDF 无法提取文字
+      return NextResponse.json({
+        success: false,
+        error: "PDF解析失败。如为扫描件/图片PDF，请转换后重试。或直接粘贴简历内容。"
+      }, { status: 400 });
     }
 
-    if (rawText.length < 50) {
-      return NextResponse.json({ success: false, error: "简历内容太短，请检查PDF" }, { status: 400 });
+    if (!rawText || rawText.trim().length < 50) {
+      return NextResponse.json({ success: false, error: "简历内容太短(" + (rawText?.length || 0) + "字符)，请检查PDF" }, { status: 400 });
     }
 
     // 删除旧简历，只保留最新一份
