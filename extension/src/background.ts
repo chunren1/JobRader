@@ -34,15 +34,15 @@ chrome.tabs.onUpdated.addListener((tabId, changeInfo, tab) => {
 
 /**
  * 更新插件图标状态
- * - 在 Boss直聘页面显示彩色图标
- * - 在其他页面显示灰色图标
+ * - 在支持的招聘页面显示激活状态
+ * - 在其他页面显示默认状态
  */
 async function updateIconState(tabId: number) {
   try {
     const tab = await chrome.tabs.get(tabId);
 
     if (tab.url?.includes("zhipin.com")) {
-      // Boss直聘页面 — 激活状态
+      // 招聘平台页面 — 激活状态
       chrome.action.setIcon({
         tabId,
         path: {
@@ -58,7 +58,7 @@ async function updateIconState(tabId: number) {
         color: "#3B82F6",
       });
     } else {
-      // 非 Boss直聘页面 — 非激活状态
+      // 非招聘页面 — 默认状态
       chrome.action.setBadgeText({ tabId, text: "" });
     }
   } catch {

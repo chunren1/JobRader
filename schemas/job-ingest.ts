@@ -13,7 +13,7 @@ export const JobIngestSchema = z.object({
   jdContent: z.string().min(1, "JD 内容不能为空"),
   tags: z.array(z.string()).default([]),
   rawUrl: z.string().url().max(500),
-  source: z.string().default("zhipin"),
+  source: z.string().default("platform"),
 });
 
 /**

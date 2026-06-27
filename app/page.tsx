@@ -39,8 +39,8 @@ export default function Home() {
               的岗位
             </h1>
             <p className="mb-10 text-lg text-muted-foreground leading-relaxed">
-              JobRadar 是一款个人效率工具。通过 Chrome 浏览器插件在浏览 Boss 直聘时提取岗位数据，
-              结合 AI 语义分析为你智能评分，帮你快速识别高质量岗位，过滤外包、虚假和低质职位。
+              JobRadar 是一款个人效率工具。通过 Chrome 浏览器插件提取岗位数据，
+              结合 AI 语义分析为你智能评分，帮你快速识别高质量岗位，过滤低质职位。
             </p>
             <div className="flex items-center justify-center gap-4">
               <Link

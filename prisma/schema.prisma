@@ -28,7 +28,7 @@ model Job {
   jdContent        String   @db.Text                  // 职位描述原文
   tags             String[]                           // 技能标签
   rawUrl           String   @unique @db.VarChar(500)  // 原始链接 (去重键)
-  source           String   @default("zhipin")        // 数据来源
+  source           String   @default("platform")     // 数据来源
 
   // AI 分析结果
   aiScore          Int?                               // AI 综合评分 (0-100)

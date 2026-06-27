@@ -247,7 +247,7 @@ export function JobCard({
               className="inline-flex items-center gap-1.5 text-xs text-primary hover:underline"
               onClick={(e) => e.stopPropagation()}
             >
-              在 Boss直聘 中查看
+              查看原始链接
               <ExternalLink className="h-3 w-3" />
             </a>
           </div>

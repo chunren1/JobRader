@@ -8,9 +8,9 @@ const inter = Inter({
 });
 
 export const metadata: Metadata = {
-  title: "JobRadar - 高质量岗位智能聚合",
+  title: "JobRadar - 个人效率工具",
   description:
-    "个人效率工具 — 辅助筛选 Boss 直聘高质量岗位，AI 智能评分，数据仅存储于本地",
+    "个人效率工具 — 岗位信息管理与 AI 智能分析，数据仅存储于本地",
 };
 
 export default function RootLayout({

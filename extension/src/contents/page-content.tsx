@@ -3,8 +3,8 @@ import { extractCurrentPageJobs } from "@/lib/extractor";
 import { syncToNextJobs } from "@/lib/sync";
 
 /**
- * Plasmo Content Script 配置 — 替代 manifest.json 中的 content_scripts
- * 仅在 Boss 直聘页面注入
+ * Plasmo Content Script 配置
+ * 在招聘网站页面注入
  */
 export const config: PlasmoCSConfig = {
   matches: ["https://www.zhipin.com/*"],
@@ -13,7 +13,6 @@ export const config: PlasmoCSConfig = {
 
 /**
  * 监听来自 Popup 的消息
- * 
  * 消息协议:
  * - EXTRACT_AND_SYNC: 提取当前页面岗位并同步
  */
@@ -29,7 +28,7 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
           console.log("[JobRadar] No job cards detected");
           sendResponse({
             success: false,
-            error: "当前页面未检测到职位卡片，请确认在 Boss直聘 职位列表页",
+            error: "当前页面未检测到职位卡片，请确认在职位列表页",
           });
           return;
         }
@@ -61,7 +60,6 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
       }
     })();
 
-    // 必须返回 true 以保持消息通道开启（异步响应）
     return true;
   }
 
@@ -77,22 +75,13 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
   }
 });
 
-/**
- * Plasmo 要求 Content Script 默认导出一个 React 组件
- * 由于本 Content Script 不需要注入 UI，返回 null
- */
 export default () => null;
-
-// ============================================
-// 页面类型检测
-// ============================================
 
 function isJobListPage(): boolean {
   const url = window.location.href;
   if (url.includes("/web/geek/job")) return true;
   if (url.includes("/web/geek/search")) return true;
 
-  // 检测页面上的岗位卡片数量
   const cards = document.querySelectorAll(
     ".job-card-wrapper, .job-card-box, [class*='job-card']"
   );

@@ -54,7 +54,7 @@ export default function Popup() {
       }
 
       if (!tab.url?.includes("zhipin.com")) {
-        throw new Error("请在 Boss直聘 职位列表页使用此工具");
+        throw new Error("请在职位列表页使用此工具");
       }
 
       // 先检查页面类型
@@ -66,7 +66,7 @@ export default function Popup() {
         !pageCheck?.isDetailPage
       ) {
         throw new Error(
-          "当前页面未检测到职位列表，请打开 Boss直聘 搜索/推荐页面"
+          "当前页面未检测到职位列表，请打开招聘网站搜索/推荐页面"
         );
       }
 
@@ -126,7 +126,7 @@ export default function Popup() {
           <h1 className="text-base font-bold text-gray-800">
             JobRadar
           </h1>
-          <p className="text-xs text-gray-500">岗位智能筛选助手</p>
+          <p className="text-xs text-gray-500">个人效率助手</p>
         </div>
       </div>
 

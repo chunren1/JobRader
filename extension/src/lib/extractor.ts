@@ -1,7 +1,7 @@
 import type { JobIngestData } from "./sync";
 
 /**
- * 从 Boss直聘 职位列表页面提取岗位信息
+ * 从招聘网站职位页面提取岗位信息
  * 
  * 规则说明：基于 DOM 选择器提取，不破解任何加密参数
  * 仅在用户主动触发时运行（Popup 按钮点击）
@@ -9,7 +9,7 @@ import type { JobIngestData } from "./sync";
 export function extractCurrentPageJobs(): JobIngestData[] {
   const jobs: JobIngestData[] = [];
 
-  // Boss直聘搜索列表页的卡片选择器 (需根据实际页面结构调整)
+  // 招聘网站列表页的卡片选择器 (需根据实际页面结构调整)
   const jobCards = document.querySelectorAll(
     ".job-card-wrapper, .job-card-box, [class*='job-card']"
   );
@@ -84,7 +84,7 @@ export function extractCurrentPageJobs(): JobIngestData[] {
           jdContent: jdContent || `${title} - ${company}`,
           tags,
           rawUrl,
-          source: "zhipin",
+          source: "platform",
         });
       }
     } catch (err) {
@@ -148,7 +148,7 @@ function extractSingleJob(): JobIngestData | null {
       jdContent,
       tags,
       rawUrl: window.location.href,
-      source: "zhipin",
+      source: "platform",
     };
   } catch {
     return null;

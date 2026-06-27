@@ -155,7 +155,7 @@ export default function Dashboard() {
 
             {/* Info */}
             <div className="mt-6 rounded-lg bg-muted/50 p-3 text-[11px] leading-relaxed text-muted-foreground">
-              通过 Chrome 插件在 Boss直聘 页面提取岗位，AI 自动分析评分，助你高效决策
+              通过 Chrome 插件提取岗位，AI 自动分析评分，助你高效决策
             </div>
           </div>
         </aside>
@@ -222,7 +222,7 @@ export default function Dashboard() {
                 <p className="mb-6 max-w-sm text-sm text-muted-foreground">
                   {viewMode === "favorites"
                     ? "点击岗位卡片上的心形图标即可收藏。收藏后可以添加自定义笔记和标签。"
-                    : "使用 Chrome 插件在 Boss直聘 提取岗位数据，或调整筛选条件"}
+                    : "使用 Chrome 插件提取岗位数据，或调整筛选条件"}
                 </p>
                 {viewMode !== "favorites" && (
                   <button
