@@ -94,11 +94,12 @@ export async function analyzeJob(
     return null;
   }
 
-  const model = process.env.OPENAI_MODEL || "gpt-4o-mini";
+  const model = process.env.OPENAI_MODEL || "deepseek-ai/DeepSeek-V4-Flash";
+  const baseUrl = process.env.AI_BASE_URL || "https://api.siliconflow.cn/v1";
   const truncatedJD = truncateJD(jdContent);
 
   try {
-    const response = await fetch("https://api.openai.com/v1/chat/completions", {
+    const response = await fetch(`${baseUrl}/chat/completions`, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
