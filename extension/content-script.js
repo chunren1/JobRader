@@ -117,10 +117,8 @@ function extractJobs() {
 // 从文本块提取字段
 function parseFromText(text) {
   var result = { title: "", location: "", saltRaw: "" };
-  // 按换行拆分，合并过短的行
   var rawLines = text.split(/[\n\r]+/).map(function(l) { return l.trim(); }).filter(function(l) { return l.length > 0; });
 
-  // 把过短行（<4字符）合并到相邻行
   var lines = [];
   for (var i = 0; i < rawLines.length; i++) {
     var l = rawLines[i];
@@ -131,49 +129,46 @@ function parseFromText(text) {
     }
   }
 
-  // 识别哪些是标题、薪资、城市、公司
+  // 要跳过的干扰文本
+  var BLACKLIST = /^(举报|投诉|分享|收藏|关注|微信|扫码|小程序|APP|下载|打开|看准|脉脉|BOSS直聘|聊天|立即沟通|沟通|投递|简历|电话|邮箱|在线简历|附件|校招|社招|实习|全职|兼职|远程|居家|现场|办公|\d+人|规模|融资|轮$|天使轮|A轮|B轮|C轮|D轮|IPO|上市|未融资|不需要融资|职位|描述|职责|要求|任职|详情|介绍|福利|待遇|亮点)$/;
+
   var titleIdx = -1, companyIdx = -1, salIdx = -1, locIdx = -1;
 
   for (var i = 0; i < lines.length; i++) {
     var line = lines[i];
 
-    // 薪资: 含数字+K/万
+    // 薪资
     if (salIdx < 0 && line.match(/\d+[kK万萬]/) && line.length < 25) {
-      result.saltRaw = line;
-      salIdx = i;
+      result.saltRaw = line; salIdx = i;
     }
-    // 城市: 单行纯城市名
-    else if (locIdx < 0 && line.match(/^(北京|上海|广州|深圳|杭州|成都|武汉|南京|西安|厦门|苏州|长沙|天津|重庆|郑州|东莞|合肥|佛山|福州|青岛|大连)(\|区)?$/)) {
-      result.location = line;
-      locIdx = i;
+    // 城市
+    else if (locIdx < 0 && line.match(/^(北京|上海|广州|深圳|杭州|成都|武汉|南京|西安|厦门|苏州|长沙|天津|重庆|郑州|东莞|合肥|佛山|福州|青岛|大连)(区)?$/)) {
+      result.location = line; locIdx = i;
     }
-    // 标题: 第一个不含薪资数字的较长行（不是经验学历行）
+    // 标题
     else if (titleIdx < 0 && line.length > 2) {
-      var isMeta = line.match(/^\d/) ||     // 数字开头（如"3-5年"）
-                   line.match(/年经验|本科|大专|硕士|博士|应届|不限经验|在校/) ||  // 学历经验
-                   line.match(/^\d+[kK万]/);  // 含薪资数字
-      if (!isMeta) {
+      var skip = BLACKLIST.test(line) ||
+                 line.match(/^\d/) ||
+                 line.match(/年经验|本科|大专|硕士|博士|应届|在校|要求|熟练|熟悉|精通|了解|负责|参与|具有|具备/) ||
+                 line.match(/^[A-Za-z\s]+$/);
+      if (!skip) {
         result.title = line;
         titleIdx = i;
       }
     }
-    // 公司: 标题后的第一行短文本
+    // 公司
     else if (titleIdx >= 0 && companyIdx < 0 && line.length > 1 && line.length < 30) {
-      if (i !== salIdx && i !== locIdx && !line.match(/\d+[kK]/)) {
-        result.company = line;
-        companyIdx = i;
+      if (i !== salIdx && i !== locIdx && !line.match(/\d+[kK]/) && !BLACKLIST.test(line)) {
+        result.company = line; companyIdx = i;
       }
     }
   }
 
-  // 如果标题中有薪资数字，去掉
   if (result.saltRaw && result.title.indexOf(result.saltRaw) !== -1) {
     result.title = result.title.replace(result.saltRaw, "").trim();
   }
-  // 再去掉标题末尾的多余空格和短线
   result.title = result.title.replace(/[-\s·]+$/, "").trim();
 
-  // 城市兜底
   if (!result.location) {
     var m = text.match(/北京|上海|广州|深圳|杭州|成都|武汉|南京|西安|厦门/);
     if (m) result.location = m[0];
