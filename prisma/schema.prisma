@@ -118,13 +118,14 @@ model AiAnalysisCache {
 // 求职者简历
 // ============================================
 model Resume {
-  id         String   @id @default(cuid())
-  rawText    String                            // PDF 原始文本
-  structured String   @default("{}")           // AI提取的结构化JSON
-  fileName   String?
-  preferences String  @default("{}")           // 用户自定义偏好 JSON
-  createdAt  DateTime @default(now())
-  updatedAt  DateTime @updatedAt
+  id            String   @id @default(cuid())
+  rawText       String                            // PDF 原始文本
+  structured    String   @default("{}")           // AI提取的结构化JSON
+  fileName      String?
+  preferences   String   @default("{}")           // 用户自定义偏好 JSON
+  scoringConfig String   @default("{}")           // 评分字段配置 JSON
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
 
   @@map("resumes")
 }

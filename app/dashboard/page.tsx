@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useCallback, useEffect, useRef } from "react";
-import { Radar, Heart, LayoutDashboard, RefreshCw, Loader2, Trash2, CheckSquare, Square, BarChart3, User, Settings2, X, ExternalLink } from "lucide-react";
+import { Radar, Heart, LayoutDashboard, RefreshCw, Loader2, Trash2, CheckSquare, Square, BarChart3, User, Settings2, X, ExternalLink, Sliders } from "lucide-react";
 import Link from "next/link";
 import { cn, formatSalary } from "@/lib/utils";
 import { useJobs, useToggleFavorite, type JobData } from "@/lib/hooks/use-jobs";
@@ -9,6 +9,7 @@ import { JobCard } from "@/components/job-card";
 import { FilterBar } from "@/components/filter-bar";
 import { AnalyticsCharts } from "@/components/analytics-charts";
 import { ResumeAnalysis } from "@/components/resume-analysis";
+import { ScoringConfig } from "@/components/scoring-config";
 import { Pagination } from "@/components/pagination";
 import { PageSkeleton, JobCardSkeleton } from "@/components/skeleton";
 import { toast } from "@/components/toast";
@@ -30,7 +31,7 @@ export default function Dashboard() {
   const [favoritedIds, setFavoritedIds] = useState<Set<string>>(new Set());
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [batchDeleting, setBatchDeleting] = useState(false);
-  const [viewMode, setViewMode] = useState<"all" | "favorites" | "analytics" | "resume">("all");
+  const [viewMode, setViewMode] = useState<"all" | "favorites" | "analytics" | "resume" | "scoring">("all");
   const [resumeText, setResumeText] = useState<string | null>(null);
   const [resumeUploading, setResumeUploading] = useState(false);
 
@@ -262,6 +263,19 @@ export default function Dashboard() {
               </button>
 
               <button
+                onClick={() => setViewMode("scoring")}
+                className={cn(
+                  "flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-colors",
+                  viewMode === "scoring"
+                    ? "bg-primary text-primary-foreground"
+                    : "text-muted-foreground hover:bg-secondary hover:text-foreground"
+                )}
+              >
+                <Sliders className="h-4 w-4" />
+                AI 评分配置
+              </button>
+
+              <button
                 onClick={() => setViewMode("analytics")}
                 className={cn(
                   "flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-colors",
@@ -362,6 +376,7 @@ export default function Dashboard() {
                 {viewMode === "favorites" && "我的收藏"}
                 {viewMode === "analytics" && "数据分析"}
                 {viewMode === "resume" && "简历分析"}
+                {viewMode === "scoring" && "AI 评分配置"}
                 {viewMode === "all" && "岗位看板"}
               </h1>
               <p className="mt-1 text-sm text-muted-foreground">
@@ -386,6 +401,7 @@ export default function Dashboard() {
 
             {/* Analytics Section */}
             {/* Non-list views */}
+            {viewMode === "scoring" && <div className="animate-fade-in"><ScoringConfig /></div>}
             {viewMode === "resume" && <div className="animate-fade-in"><ResumeAnalysis /></div>}
 
             {/* Job Comparison Modal */}

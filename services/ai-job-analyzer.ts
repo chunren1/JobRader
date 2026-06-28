@@ -5,7 +5,7 @@ function truncateJD(jdContent: string, maxChars = 3000): string {
   return jdContent.substring(0, maxChars) + "...(已截断)";
 }
 
-function buildSystemPrompt(resumeText: string, expectedSalary: string, structuredResume?: Record<string, unknown>, prefsText?: string): string {
+function buildSystemPrompt(resumeText: string, expectedSalary: string, structuredResume?: Record<string, unknown>, prefsText?: string, scoringConfig?: { fields: { id: string; name: string; enabled: boolean; weight: number; maxScore: number }[] } | null): string {
   const struct = structuredResume && Object.keys(structuredResume).length > 1
     ? `\n### 简历结构化数据\n- 姓名: ${structuredResume.name || "未知"}\n- 求职方向: ${structuredResume.title || "未知"}\n- 工作年限: ${structuredResume.yearsOfExp || "未知"}\n- 学历: ${(structuredResume.education as any)?.degree || "未知"} ${(structuredResume.education as any)?.major || ""}\n- 技能: ${(structuredResume.skills as string[])?.join(", ") || "未知"}\n- 工作经历: ${(structuredResume.experience as any[])?.map((e: any) => `${e.company} ${e.role} (${e.duration})`).join("; ") || "无"}\n- 项目经验: ${(structuredResume.projects as any[])?.map((p: any) => p.name).join(", ") || "无"}\n- 核心优势: ${structuredResume.summary || "无"}`
     : "";
@@ -14,7 +14,12 @@ function buildSystemPrompt(resumeText: string, expectedSalary: string, structure
     ? `\n## 用户额外要求（必须严格参照）\n${prefsText}`
     : "";
 
-  return `你是顶级猎头公司的职业匹配分析师。你需要深度对比求职者简历和目标岗位JD，输出结构化的匹配分析报告。
+  const enabledFields = scoringConfig?.fields?.filter(f => f.enabled) || [];
+  const scoringSection = enabledFields.length > 0
+    ? `\n## 评分维度（按此权重计算综合分）\n${enabledFields.map(f => `- ${f.name}(${f.id}): 权重${f.weight}%, 满分${f.maxScore}`).join("\n")}`
+    : "\n## 评分维度\n- 技术匹配度(tech): 权重35%\n- 薪资竞争力(salary): 权重25%\n- 公司稳定性(stability): 权重20%\n- 成长空间(growth): 权重20%";
+
+  return `你是顶级猎头公司的职业匹配分析师。你需要深度对比求职者简历和目标岗位JD，输出结构化的匹配分析报告。${scoringSection}
 
 ## 求职者简历
 ${resumeText || "未上传简历"}${struct}${prefsSection}
@@ -82,7 +87,8 @@ export async function analyzeJob(
   userProfile: { resumeSummary: string; preferences: string; expectedSalary: string },
   resumeText?: string,
   structuredResume?: Record<string, unknown>,
-  prefsText?: string
+  prefsText?: string,
+  scoringConfig?: { fields: { id: string; name: string; enabled: boolean; weight: number; maxScore: number }[] } | null
 ): Promise<JobAnalysisResult | null> {
   const apiKey = process.env.OPENAI_API_KEY;
   if (!apiKey) { console.warn("No API key configured"); return null; }
@@ -103,7 +109,7 @@ export async function analyzeJob(
       body: JSON.stringify({
         model,
         messages: [
-          { role: "system", content: buildSystemPrompt(resumeForPrompt, userProfile.expectedSalary, structuredResume, prefsText) },
+          { role: "system", content: buildSystemPrompt(resumeForPrompt, userProfile.expectedSalary, structuredResume, prefsText, scoringConfig) },
           { role: "user", content: `请分析以下职位：\n\n${truncatedJD}` },
         ],
         temperature: 0.3, max_tokens: 2000,
