@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useCallback, useEffect } from "react";
+import { useState, useCallback, useEffect, useRef } from "react";
 import { Radar, Heart, LayoutDashboard, RefreshCw, Loader2, Trash2, CheckSquare, Square, BarChart3, User, Settings2 } from "lucide-react";
 import Link from "next/link";
 import { cn } from "@/lib/utils";
@@ -73,32 +73,27 @@ export default function Dashboard() {
   }, []);
 
   // 清除简历
-  // 自定义偏好
-  const [prefs, setPrefs] = useState<Record<string, string>>({});
-  const [prefKey, setPrefKey] = useState("");
-  const [prefVal, setPrefVal] = useState("");
+  // 自定义偏好（自然语言）
+  const [prefsText, setPrefsText] = useState("");
+  const [prefsSaving, setPrefsSaving] = useState(false);
+  const prefsTimer = useRef<ReturnType<typeof setTimeout>>(null);
 
   useEffect(() => {
     fetch("/api/preferences").then(r => r.json()).then(d => {
-      if (d.success) setPrefs(d.data);
+      if (d.success) setPrefsText(d.text || "");
     }).catch(() => {});
   }, []);
 
-  const addPref = () => {
-    const k = prefKey.trim(), v = prefVal.trim();
-    if (!k || !v) return;
-    const newPrefs = { ...prefs, [k]: v };
-    setPrefs(newPrefs);
-    fetch("/api/preferences", { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify(newPrefs) });
-    setPrefKey(""); setPrefVal("");
-  };
-
-  const delPref = (k: string) => {
-    const newPrefs = { ...prefs };
-    delete newPrefs[k];
-    setPrefs(newPrefs);
-    fetch("/api/preferences", { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify(newPrefs) });
-  };
+  // 输入后 1 秒自动保存
+  const handlePrefsChange = useCallback((val: string) => {
+    setPrefsText(val);
+    if (prefsTimer.current) clearTimeout(prefsTimer.current);
+    prefsTimer.current = setTimeout(() => {
+      setPrefsSaving(true);
+      fetch("/api/preferences", { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ text: val }) })
+        .finally(() => setPrefsSaving(false));
+    }, 800);
+  }, []);
 
   const handleClearResume = useCallback(async () => {
     await fetch("/api/resume", { method: "DELETE" }).catch(() => {});
@@ -304,23 +299,19 @@ export default function Dashboard() {
             </div>
 
             {/* User Preferences */}
-            <div className="mt-6 space-y-2">
-              <div className="flex items-center gap-2 px-3 text-xs font-semibold text-muted-foreground">
-                <Settings2 className="h-3.5 w-3.5" />自定义偏好
+            <div className="mt-6 space-y-2 px-3">
+              <div className="flex items-center gap-2 text-xs font-semibold text-muted-foreground">
+                <Settings2 className="h-3.5 w-3.5" />求职偏好
+                {prefsSaving && <span className="text-[10px] animate-pulse">保存中...</span>}
               </div>
-              {Object.entries(prefs).map(([k, v]) => (
-                <div key={k} className="flex items-center gap-1 px-3 py-1 rounded-md hover:bg-secondary group">
-                  <span className="text-xs text-muted-foreground truncate flex-1">{k}: <span className="text-foreground">{v}</span></span>
-                  <button onClick={() => delPref(k)} className="opacity-0 group-hover:opacity-100 text-red-400 hover:text-red-600"><X className="h-3 w-3" /></button>
-                </div>
-              ))}
-              <div className="flex gap-1 px-3">
-                <input value={prefKey} onChange={e => setPrefKey(e.target.value)} onKeyDown={e => e.key === "Enter" && prefVal && addPref()}
-                  placeholder="字段" className="w-16 rounded-md border px-2 py-1 text-[11px] focus:outline-none focus:border-primary" />
-                <input value={prefVal} onChange={e => setPrefVal(e.target.value)} onKeyDown={e => e.key === "Enter" && prefKey && addPref()}
-                  placeholder="值" className="flex-1 rounded-md border px-2 py-1 text-[11px] focus:outline-none focus:border-primary" />
-                <button onClick={addPref} disabled={!prefKey.trim() || !prefVal.trim()} className="rounded-md border px-2 py-1 text-[11px] hover:bg-secondary disabled:opacity-30">+</button>
-              </div>
+              <textarea
+                value={prefsText}
+                onChange={e => handlePrefsChange(e.target.value)}
+                placeholder="想找什么样的岗位？例如：&#10;广州Java实习岗，不接受加班，远程优先"
+                rows={3}
+                className="w-full rounded-lg border px-3 py-2 text-xs focus:outline-none focus:border-primary resize-none"
+              />
+              <p className="text-[10px] text-muted-foreground">用自然语言描述，AI 会自动理解你的偏好</p>
             </div>
 
           </div>
