@@ -10,6 +10,7 @@ const defaultConfig = {
     { id: "stability", name: "公司稳定性", type: "system", enabled: true, weight: 20, maxScore: 100 },
     { id: "growth", name: "成长空间", type: "system", enabled: true, weight: 20, maxScore: 100 },
   ],
+  rules: "",
 };
 
 export async function GET() {
