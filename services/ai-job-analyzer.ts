@@ -5,15 +5,19 @@ function truncateJD(jdContent: string, maxChars = 3000): string {
   return jdContent.substring(0, maxChars) + "...(已截断)";
 }
 
-function buildSystemPrompt(resumeText: string, expectedSalary: string, structuredResume?: Record<string, unknown>): string {
+function buildSystemPrompt(resumeText: string, expectedSalary: string, structuredResume?: Record<string, unknown>, preferences?: Record<string, string>): string {
   const struct = structuredResume && Object.keys(structuredResume).length > 1
     ? `\n### 简历结构化数据\n- 姓名: ${structuredResume.name || "未知"}\n- 求职方向: ${structuredResume.title || "未知"}\n- 工作年限: ${structuredResume.yearsOfExp || "未知"}\n- 学历: ${(structuredResume.education as any)?.degree || "未知"} ${(structuredResume.education as any)?.major || ""}\n- 技能: ${(structuredResume.skills as string[])?.join(", ") || "未知"}\n- 工作经历: ${(structuredResume.experience as any[])?.map((e: any) => `${e.company} ${e.role} (${e.duration})`).join("; ") || "无"}\n- 项目经验: ${(structuredResume.projects as any[])?.map((p: any) => p.name).join(", ") || "无"}\n- 核心优势: ${structuredResume.summary || "无"}`
+    : "";
+
+  const prefsText = preferences && Object.keys(preferences).length > 0
+    ? `\n## 用户自定义偏好（必须严格参照）\n${Object.entries(preferences).map(([k, v]) => `- ${k}: ${v}`).join("\n")}`
     : "";
 
   return `你是顶级猎头公司的职业匹配分析师。你需要深度对比求职者简历和目标岗位JD，输出结构化的匹配分析报告。
 
 ## 求职者简历
-${resumeText || "未上传简历"}${struct}
+${resumeText || "未上传简历"}${struct}${prefsText}
 
 ## 期望薪资
 ${expectedSalary || "未设置"}
@@ -77,7 +81,8 @@ export async function analyzeJob(
   jdContent: string,
   userProfile: { resumeSummary: string; preferences: string; expectedSalary: string },
   resumeText?: string,
-  structuredResume?: Record<string, unknown>
+  structuredResume?: Record<string, unknown>,
+  userPrefs?: Record<string, string>
 ): Promise<JobAnalysisResult | null> {
   const apiKey = process.env.OPENAI_API_KEY;
   if (!apiKey) { console.warn("No API key configured"); return null; }
@@ -98,7 +103,7 @@ export async function analyzeJob(
       body: JSON.stringify({
         model,
         messages: [
-          { role: "system", content: buildSystemPrompt(resumeForPrompt, userProfile.expectedSalary, structuredResume) },
+          { role: "system", content: buildSystemPrompt(resumeForPrompt, userProfile.expectedSalary, structuredResume, userPrefs) },
           { role: "user", content: `请分析以下职位：\n\n${truncatedJD}` },
         ],
         temperature: 0.3, max_tokens: 2000,
