@@ -1,51 +1,18 @@
 /**
- * JobRadar Content Script v4
- * 诊断修复：薪资反爬字体 + JD/要求提取
+ * JobRadar Content Script v5
+ * 核心: 从卡片原始文本直接解析所有字段
  */
 var NEXTJS_URL = "http://localhost:3000";
 var LOCAL_SECRET = "job-radar-local-dev-secret-change-me";
 
 // ============================================
-// 反爬薪资解码 — XHR 拦截 + 字体解码
-// ============================================
-var salaryCache = {}; // { url/selector: {min, max} }
+// 薪资解码 - 从渲染结果获取真实数字
+// ====================================
+var fontMap = null;
 
-// 方法1: 拦截 fetch/XHR 响应，从 JSON 中提取真实薪资
-(function() {
-  var origFetch = window.fetch;
-  window.fetch = function() {
-    return origFetch.apply(this, arguments).then(function(resp) {
-      var url = arguments[0];
-      if (typeof url === "string" && url.indexOf("zhipin") > -1 && url.indexOf("search") > -1) {
-        resp.clone().json().then(function(json) {
-          try {
-            var list = json.zpData || json.data || {};
-            var jobs = list.jobList || list.jobCards || [];
-            if (Array.isArray(jobs)) {
-              jobs.forEach(function(j) {
-                if (j.encryptJobId || j.securityId || j.jobId) {
-                  var key = j.encryptJobId || j.securityId || j.jobId;
-                  salaryCache[key] = { min: j.minSalary || j.salaryMin, max: j.maxSalary || j.salaryMax };
-                }
-              });
-              console.log("[JobRadar] Captured salary for " + Object.keys(salaryCache).length + " jobs from API");
-            }
-          } catch(e) { /* JSON parse error */ }
-        }).catch(function(){});
-      }
-      return resp;
-    }).catch(function(){ return origFetch.apply(this, arguments); });
-  };
-})();
-
-// 方法2: 字体解码 — 查找 Boss 自定义字体，尝试映射字符→数字
-function decodeSalaryFont(rawText) {
-  if (!rawText) return rawText;
-  // 检查是否含私有区字符（Boss 反爬字体的特征）
-  var hasPrivate = /[\uE000-\uF8FF]/.test(rawText);
-  if (!hasPrivate) return rawText;
-
-  // 尝试从页面 CSS 找字体映射
+function buildFontMap() {
+  if (fontMap) return;
+  fontMap = {};
   try {
     var sheets = document.styleSheets;
     for (var i = 0; i < sheets.length; i++) {
@@ -54,40 +21,64 @@ function decodeSalaryFont(rawText) {
         if (!rules) continue;
         for (var j = 0; j < rules.length; j++) {
           var text = rules[j].cssText || "";
-          if (text.indexOf("font-face") > -1 && text.indexOf("boss") > -1) {
-            console.log("[JobRadar] Found Boss font-face:", text.substring(0, 200));
+          // 找 Boss 自定义字体文件 URL
+          if (text.indexOf("@font-face") > -1 && (text.indexOf("boss") > -1 || text.indexOf("zhipin") > -1 || text.indexOf("job-search") > -1 || text.indexOf(".woff") > -1)) {
+            // 提取 font-family 名称
+            var ffm = text.match(/font-family:\s*"?([^";]+)/);
+            if (ffm) {
+              var ffName = ffm[1].trim();
+              // 在页面中找到使用这个字体的元素
+              var els = document.querySelectorAll("*");
+              for (var k = 0; k < Math.min(els.length, 500); k++) {
+                var style = window.getComputedStyle(els[k]);
+                if (style.fontFamily && style.fontFamily.indexOf(ffName) > -1) {
+                  var txt = (els[k].textContent || "").trim();
+                  if (txt.length >= 1 && txt.length <= 3) {
+                    // 临时换字体看真实字符
+                    var orig = els[k].style.fontFamily;
+                    els[k].style.fontFamily = "Arial, sans-serif";
+                    var realChar = els[k].textContent.trim();
+                    els[k].style.fontFamily = orig;
+                    // 检查 realChar 是否为数字
+                    if (/^\d$/.test(realChar)) {
+                      fontMap[txt] = realChar;
+                    }
+                  }
+                }
+              }
+            }
           }
         }
       } catch(e) {}
     }
   } catch(e) {}
+  console.log("[JobRadar] Font map:", JSON.stringify(fontMap));
+}
 
-  // 解码规则：Boss字体中常见映射
-  // 注意：不同版本的 Boss 字体映射不同，这是尝试性解码
-  var map = {};
-  // 尝试：从 CSS 类名推断 — 常见映射 =0, =1 ...
-  for (var k = 0; k < 10; k++) {
-    map[String.fromCharCode(0xE000 + k)] = String(k);
-  }
-  // 也尝试常见的偏移
-  for (var k = 0; k < 10; k++) {
-    map[String.fromCharCode(0xE050 + k)] = String(k);
-    map[String.fromCharCode(0xE060 + k)] = String(k);
-    map[String.fromCharCode(0xE070 + k)] = String(k);
-  }
+function decodeSalaryText(raw) {
+  buildFontMap();
+  // 查找原始文本中的薪资行
+  // 常见模式: 内容 数字-数字元/天 或 内容 数字K-数字K
+  var result = { min: null, max: null };
 
-  // 递归替换
-  var result = rawText;
-  var changed = true;
-  while (changed) {
-    changed = false;
-    for (var char in map) {
-      if (result.indexOf(char) !== -1) {
-        result = result.split(char).join(map[char]);
-        changed = true;
-      }
+  // 方法1: 用字体映射解码
+  if (Object.keys(fontMap).length > 0) {
+    var decoded = raw;
+    for (var k in fontMap) {
+      decoded = decoded.split(k).join(fontMap[k]);
     }
+    // 从decode后文本提取数字
+    var m = decoded.match(/(\d+)[-~](\d+)\s*元\/天/);
+    if (m) { return { min: parseInt(m[1]) * 22, max: parseInt(m[2]) * 22 }; }
+    m = decoded.match(/(\d+)[-~](\d+)\s*[kK]/);
+    if (m) { return { min: parseInt(m[1]) * 1000, max: parseInt(m[2]) * 1000 }; }
+    m = decoded.match(/(\d+)[-~](\d+)\s*万/);
+    if (m) { return { min: parseInt(m[1]) * 10000, max: parseInt(m[2]) * 10000 }; }
   }
+
+  // 方法2: 从纯数字范围匹配
+  var m2 = raw.match(/(\d{4,6})\s*[-~]\s*(\d{4,6})/);
+  if (m2) return { min: parseInt(m2[1]), max: parseInt(m2[2]) };
 
   return result;
 }
@@ -101,53 +92,10 @@ function cleanText(s) {
 }
 
 // ============================================
-// 薪资解析 — 增强版
-// ============================================
-function parseSalary(rawText) {
-  // 先尝试字体解码
-  var text = decodeSalaryFont(rawText);
-  if (!text) return { min: null, max: null };
-
-  // 策略1: 匹配 "20-35K", "150-250元/天", "2万-3万"
-  var m = text.match(/(\d+\.?\d*)\s*[-~至到]\s*(\d+\.?\d*)\s*(元\/天|[kK]|万|萬)/);
-  if (m) {
-    var min = parseFloat(m[1]), max = parseFloat(m[2]), unit = m[3] || "";
-    if (unit === "万" || unit === "萬") { min *= 10000; max *= 10000; }
-    else if (unit === "K" || unit === "k") { min *= 1000; max *= 1000; }
-    else if (unit === "元/天") { min *= 22; max *= 22; }
-    else if (min < 100 && max < 500) { min *= 1000; max *= 1000; }
-    return { min: Math.round(min), max: Math.round(max) };
-  }
-
-  // 策略2: 纯数字范围 "20000-35000"
-  m = text.match(/(\d{4,6})\s*[-~至到]\s*(\d{4,6})/);
-  if (m) return { min: parseInt(m[1]), max: parseInt(m[2]) };
-
-  // 策略3: 从API缓存查找
-  return { min: null, max: null };
-}
-
-// 从缓存找薪资
-function getSalaryFromCache(cardText, href) {
-  // 从 href 中提取 key
-  if (href) {
-    var keyMatch = href.match(/[?&](securityId|encryptJobId)=([^&]+)/);
-    if (keyMatch) {
-      var cached = salaryCache[keyMatch[2]];
-      if (cached) return { min: cached.min, max: cached.max };
-    }
-  }
-  // 遍历缓存找匹配
-  for (var key in salaryCache) {
-    if (salaryCache[key]) return salaryCache[key];
-  }
-  return null;
-}
-
-// ============================================
 // 主入口
 // ============================================
 function extractJobs() {
+  buildFontMap();
   var url = window.location.href;
   if (url.indexOf("job_detail") !== -1) {
     var job = extractFromDetailPage();
@@ -156,72 +104,40 @@ function extractJobs() {
   return extractFromListPage();
 }
 
-// ============================================
-// 详情页提取
-// ============================================
 function extractFromDetailPage() {
-  var title = "";
-  var titleSels = ["h1", ".name h1", ".job-title", "[class*='job-name']", ".info-primary .name"];
-  for (var i = 0; i < titleSels.length; i++) {
-    var el = document.querySelector(titleSels[i]);
-    if (el) {
-      var t = cleanText(el.innerText || el.textContent);
-      if (t && t.length > 2 && t.length < 80) {
-        title = t.replace(/\s*\d+[-~]\d+[kK元].*$/, "").trim();
-        break;
-      }
-    }
-  }
-  if (!title) { var dt = cleanText(document.title); title = dt.split(/[-_|]/)[0].trim(); }
+  var title = document.title.split(/[-_|]/)[0].trim() || "";
   if (!title) return null;
 
-  var companyEl = document.querySelector("[class*='company-info'] [class*='name'], .company-name, [class*='cname']");
+  var companyEl = document.querySelector("[class*='company'] [class*='name'], .company-name");
   var company = companyEl ? cleanText(companyEl.innerText || companyEl.textContent) : "未知";
 
-  // 薪资：先字体解码，再API缓存，再文本解析
-  var salEl = document.querySelector(".salary, [class*='salary'], .red");
-  var salary = getSalaryFromCache("", window.location.href);
-  if (!salary && salEl) {
-    salary = parseSalary(salEl.innerText || salEl.textContent);
-  }
+  var salEl = document.querySelector(".salary, [class*='salary']");
+  var salary = decodeSalaryText(salEl ? (salEl.innerText || salEl.textContent) : "");
 
-  var locEl = document.querySelector("[class*='area'], [class*='location'], .info-primary p");
+  var locEl = document.querySelector("[class*='area'], [class*='location']");
   var location = "未知";
-  if (locEl) {
-    var cm = (locEl.innerText || locEl.textContent).match(/北京|上海|广州|深圳|杭州|成都|武汉|南京|西安|厦门|苏州|长沙|天津|重庆|郑州/);
-    if (cm) location = cm[0];
-  }
+  if (locEl) { var cm = (locEl.innerText || "").match(/北京|上海|广州|深圳|杭州|成都|武汉|南京|西安/); if (cm) location = cm[0]; }
 
-  // JD + 要求 — 详情页完整提取
-  var jdEl = document.querySelector(".job-detail, .job-sec-text, [class*='job-detail'], [class*='detail-content'], [class*='job-sec']");
+  var jdEl = document.querySelector(".job-detail, .job-sec-text, [class*='job-detail'], [class*='job-sec']");
   var jd = jdEl ? cleanText(jdEl.innerText || jdEl.textContent) : "";
-  if (!jd || jd.length < 50) {
-    // 从 body 中提取最长的文本块作为 JD
-    var divs = document.querySelectorAll("div");
-    var longest = "";
-    divs.forEach(function(d) {
-      var t = cleanText(d.innerText || d.textContent);
-      if (t.length > longest.length && t.length < 5000 && (t.indexOf("岗位") > -1 || t.indexOf("职责") > -1 || t.indexOf("要求") > -1)) longest = t;
-    });
-    jd = longest || cleanText(document.body.innerText).substring(0, 2000);
-  }
+  if (jd.length < 50) jd = cleanText(document.body.innerText).substring(0, 2000);
 
   var tags = [];
-  document.querySelectorAll("[class*='tag-item'], [class*='skill-tag'], .job-tags li").forEach(function(el) {
+  document.querySelectorAll(".tag-item li, [class*='tag-item']").forEach(function(el) {
     var t = cleanText(el.innerText || el.textContent);
     if (t && t.length < 15 && tags.indexOf(t) === -1) tags.push(t);
   });
 
   return {
     title: title, company: company,
-    salaryMin: salary ? salary.min : null, salaryMax: salary ? salary.max : null,
+    salaryMin: salary.min, salaryMax: salary.max,
     location: location, jdContent: jd,
     tags: tags, rawUrl: window.location.href, source: "platform"
   };
 }
 
 // ============================================
-// 列表页提取 - v4.1 精准解析
+// 列表页 - 从卡片原始文本解析所有字段
 // ============================================
 function extractFromListPage() {
   var jobs = [];
@@ -237,92 +153,101 @@ function extractFromListPage() {
 
   cards.forEach(function(card) {
     try {
-      var link = card.querySelector("a[href*='job_detail'], a[href*='job/'], .job-name a, .job-card-left a");
+      var link = card.querySelector("a[href*='job_detail'], a[href*='job/'], .job-name a");
       if (!link) link = card.querySelector("a[href]");
       var href = link ? (link.href || link.getAttribute("href") || "") : "";
-      if (!href || href === "#" || href.startsWith("javascript") || href.length < 15) return;
-      if (seen[href]) return;
+      if (!href || href.length < 15 || seen[href]) return;
       seen[href] = true;
 
-      // 标题
+      // 原始文本
+      var raw = (card.innerText || card.textContent || "").replace(/\s+/g, " ").trim();
+      if (raw.length < 10) return;
+
+      // 解析标题
       var title = "";
-      var tSels = [".job-name", ".job-title", "[class*='job-name']", ".name a"];
-      for (var i = 0; i < tSels.length; i++) {
-        var el = card.querySelector(tSels[i]);
-        if (el) { var t = (el.innerText || el.textContent).trim().replace(/\s+/g," "); if (t && t.length > 2 && t.length < 80) { title = t; break; } }
+      var tEl = card.querySelector(".job-name, .job-title, [class*='job-name']");
+      if (tEl) title = cleanText(tEl.innerText || tEl.textContent);
+      if (!title) {
+        // 从原始文本：取第一个非数字开头的短行
+        var lines = raw.split(/\s+/);
+        for (var l = 0; l < lines.length; l++) {
+          if (lines[l].length > 1 && !/^\d/.test(lines[l]) && lines[l].length < 50) {
+            title = lines[l]; break;
+          }
+        }
       }
       if (!title) return;
 
-      // 卡片原始文本（不 clean，保留反爬字符）
-      var raw = (card.innerText || card.textContent || "").replace(/\s+/g, " ").trim();
+      // === 从原始文本解析所有字段 ===
+      // 模式: {title} {salary} {schedule} {edu} {tags} {company} {location·district}
 
-      // === 薪资解析 ===
-      var salary = getSalaryFromCache(raw, href);
-      if (!salary || salary.min == null) {
-        // 从原始文本解析薪资
-        salary = parseSalary(raw);
-      }
-      if (!salary || salary.min == null) {
-        // 最后尝试：查找含私有区 Unicode 字符的薪资行
-        var salMatch = raw.match(/([^\s]{1,5})[-~]([^\s]{1,5})\s*(元\/天|[kK])/);
-        if (salMatch) salary = { min: null, max: null };
-      }
+      // 薪资: 取原始文本中的薪资片段
+      var salary = decodeSalaryText(raw);
 
-      // === 公司+地点解析 ===
+      // 公司+地点: 找 "公司名 城市·区" 模式
       var company = "未知", location = "未知";
 
-      // 策略1: 从卡片文本底部模式识别
-      // 常见格式: "公司名 城市·区·街道" 或 "公司名 城市-区"
-      var locPat = /[\u4e00-\u9fa5a-zA-Z()（）]{2,20}\s+(北京|上海|广州|深圳|杭州|成都|武汉|南京|西安|厦门|苏州|长沙|天津|重庆|郑州|东莞|合肥|佛山|福州|青岛|大连)[·\-]/;
-      var locM = raw.match(locPat);
-      if (locM) {
-        company = locM[0].replace(/\s+(北京|上海|广州|深圳|杭州|成都|武汉|南京|西安|厦门|苏州|长沙|天津|重庆|郑州|东莞|合肥|佛山|福州|青岛|大连)[·\-].*$/, "");
-        location = locM[0].match(/(北京|上海|广州|深圳|杭州|成都|武汉|南京|西安|厦门|苏州|长沙|天津|重庆|郑州|东莞|合肥|佛山|福州|青岛|大连)/)[0];
+      // 更宽松的模式
+      var cityPat = /(北京|上海|广州|深圳|杭州|成都|武汉|南京|西安|厦门|苏州|长沙|天津|重庆|郑州|东莞|合肥|佛山|福州|青岛|大连)(·|\u00b7|区|市)/;
+      var cm = raw.match(cityPat);
+      if (cm) {
+        location = cm[1];
+        var idx = cm.index;
+        // 城市前的词: 找到空格或分隔符前的最后一个2-20字符段
+        var before = raw.substring(0, idx).trim();
+        var words = before.split(/\s+/);
+        // 从后往前找第一个像公司名的词
+        for (var w = words.length - 1; w >= 0; w--) {
+          var word = words[w];
+          if (word.length >= 2 && word.length <= 20 && !/^\d/.test(word) && !/元\/天|[kK]|万|本科|大专|硕士|周|月|经验/.test(word) && word !== title) {
+            company = word;
+            break;
+          }
+        }
       }
 
-      // 策略2: 从选择器
+      // 如果公司没找到，用选择器
       if (company === "未知") {
-        var cEl = card.querySelector(".company-name, .company-text, [class*='company-name'], .cname");
-        if (cEl) company = (cEl.innerText || cEl.textContent).trim();
+        var cEl = card.querySelector(".company-name, .company-text, [class*='company'], .cname");
+        if (cEl) company = cleanText(cEl.innerText || cEl.textContent);
       }
 
       // 地点兜底
       if (location === "未知") {
         var lEl = card.querySelector(".job-area, .area, [class*='area']");
         var lText = lEl ? (lEl.innerText || lEl.textContent) : "";
-        var cm = lText.match(/北京|上海|广州|深圳|杭州|成都|武汉|南京|西安|厦门|苏州|长沙|天津|重庆|郑州/);
-        if (!cm) cm = raw.match(/北京|上海|广州|深圳|杭州|成都|武汉|南京|西安|厦门/);
-        if (cm) location = cm[0];
+        var lm = lText.match(/北京|上海|广州|深圳|杭州|成都|武汉|南京|西安|厦门|苏州|长沙|天津|重庆|郑州/);
+        if (!lm) lm = raw.match(/北京|上海|广州|深圳|杭州|成都|武汉|南京|西安|厦门/);
+        if (lm) location = lm[0];
       }
 
-      // === JD 内容 ===
-      var jd = raw.length > 800 ? raw.substring(0, 800) : raw;
-
-      // === 标签 ===
+      // 标签: 从原始文本提取技术关键词
+      var techs = ["Java", "Spring", "SpringBoot", "SpringCloud", "MySQL", "Redis", "MongoDB", "Docker", "K8s", "Kubernetes", "Go", "Golang", "Python", "React", "Vue", "TypeScript", "JavaScript", "Node", "Nginx", "Linux", "MyBatis", "Hibernate", "JVM", "微服务"];
       var tags = [];
-      card.querySelectorAll(".tag-item, .item-tag, [class*='tag']").forEach(function(el) {
-        var t = (el.innerText || el.textContent).trim();
+      techs.forEach(function(t) {
+        if (raw.indexOf(t) !== -1 && tags.indexOf(t) === -1) tags.push(t);
+      });
+
+      // 也把 card 内 tag 元素的内容加上
+      card.querySelectorAll("[class*='tag']").forEach(function(el) {
+        var t = cleanText(el.innerText || el.textContent);
         if (t && t.length < 15 && tags.indexOf(t) === -1) tags.push(t);
       });
 
-      // 从原始文本提取技能标签
-      var techWords = ["Java", "Spring", "SpringBoot", "SpringCloud", "MySQL", "Redis", "Docker", "K8s", "Kubernetes", "Go", "Golang", "Python", "React", "Vue", "TypeScript", "JavaScript", "Node", "Nginx"];
-      techWords.forEach(function(w) {
-        if (raw.indexOf(w) !== -1 && tags.indexOf(w) === -1) tags.push(w);
-      });
-
+      var jd = raw.length > 800 ? raw.substring(0, 800) : raw;
       var rawUrl = href.startsWith("http") ? href : "https://www.zhipin.com" + (href.startsWith("/") ? "" : "/") + href;
 
       jobs.push({
         title: title, company: company,
-        salaryMin: salary ? salary.min : null, salaryMax: salary ? salary.max : null,
+        salaryMin: salary.min, salaryMax: salary.max,
         location: location, jdContent: jd,
         tags: tags, rawUrl: rawUrl, source: "platform"
       });
+
     } catch (e) { console.warn("[JobRadar] card err:", e.message); }
   });
 
-  console.log("[JobRadar] List: " + jobs.length + " jobs, salaries: " + Object.keys(salaryCache).length);
+  console.log("[JobRadar] List: " + jobs.length + " jobs, fontMap size: " + Object.keys(fontMap||{}).length);
   return jobs;
 }
 
@@ -359,11 +284,10 @@ chrome.runtime.onMessage.addListener(function (msg, sender, sendResponse) {
     (async function () {
       try {
         var jobs = extractJobs();
-        console.log("[JobRadar] Total: " + jobs.length + " jobs, salaryCache: " + Object.keys(salaryCache).length);
+        console.log("[JobRadar] Extracted " + jobs.length + " jobs");
 
         if (jobs.length > 0) {
-          var s = jobs[0];
-          console.log("[JobRadar] Sample:", { title: s.title, company: s.company, sal: s.salaryMin + "-" + s.salaryMax, loc: s.location });
+          console.log("[JobRadar] Sample:", jobs[0]);
         }
 
         if (jobs.length === 0) {
@@ -387,7 +311,7 @@ chrome.runtime.onMessage.addListener(function (msg, sender, sendResponse) {
       var h = l.href || l.getAttribute("href") || "";
       if (h && h !== "#" && !h.startsWith("javascript") && h.length > 20) count++;
     });
-    sendResponse({ success: true, isListPage: count >= 3, linkCount: count, title: document.title, url: window.location.href });
+    sendResponse({ success: true, isListPage: count >= 3, linkCount: count });
     return true;
   }
 });
