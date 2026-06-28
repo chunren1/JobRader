@@ -221,7 +221,7 @@ function extractFromDetailPage() {
 }
 
 // ============================================
-// 列表页提取
+// 列表页提取 - v4.1 精准解析
 // ============================================
 function extractFromListPage() {
   var jobs = [];
@@ -244,47 +244,71 @@ function extractFromListPage() {
       if (seen[href]) return;
       seen[href] = true;
 
+      // 标题
       var title = "";
       var tSels = [".job-name", ".job-title", "[class*='job-name']", ".name a"];
       for (var i = 0; i < tSels.length; i++) {
         var el = card.querySelector(tSels[i]);
-        if (el) { var t = cleanText(el.innerText || el.textContent); if (t && t.length > 2 && t.length < 80) { title = t; break; } }
+        if (el) { var t = (el.innerText || el.textContent).trim().replace(/\s+/g," "); if (t && t.length > 2 && t.length < 80) { title = t; break; } }
       }
       if (!title) return;
 
-      var fullText = cleanText(card.innerText || card.textContent);
+      // 卡片原始文本（不 clean，保留反爬字符）
+      var raw = (card.innerText || card.textContent || "").replace(/\s+/g, " ").trim();
 
-      // 薪资：AI缓存优先 → 字体解码 → 文本解析
-      var salary = getSalaryFromCache(fullText, href);
+      // === 薪资解析 ===
+      var salary = getSalaryFromCache(raw, href);
       if (!salary || salary.min == null) {
-        var salEl = card.querySelector(".salary, .red, [class*='salary'], [class*='pay']");
-        var salText = salEl ? (salEl.innerText || salEl.textContent) : "";
-        salary = parseSalary(salText);
+        // 从原始文本解析薪资
+        salary = parseSalary(raw);
+      }
+      if (!salary || salary.min == null) {
+        // 最后尝试：查找含私有区 Unicode 字符的薪资行
+        var salMatch = raw.match(/([^\s]{1,5})[-~]([^\s]{1,5})\s*(元\/天|[kK])/);
+        if (salMatch) salary = { min: null, max: null };
       }
 
-      // 公司+地点
+      // === 公司+地点解析 ===
       var company = "未知", location = "未知";
-      var companyEl = card.querySelector(".company-name, .company-text, [class*='company-name'], .cname");
-      if (companyEl) company = cleanText(companyEl.innerText || companyEl.textContent);
 
-      var locEl = card.querySelector(".job-area, .area, [class*='area']");
-      if (locEl) {
-        var cm = (locEl.innerText || locEl.textContent).match(/北京|上海|广州|深圳|杭州|成都|武汉|南京|西安|厦门|苏州|长沙|天津|重庆|郑州/);
+      // 策略1: 从卡片文本底部模式识别
+      // 常见格式: "公司名 城市·区·街道" 或 "公司名 城市-区"
+      var locPat = /[\u4e00-\u9fa5a-zA-Z()（）]{2,20}\s+(北京|上海|广州|深圳|杭州|成都|武汉|南京|西安|厦门|苏州|长沙|天津|重庆|郑州|东莞|合肥|佛山|福州|青岛|大连)[·\-]/;
+      var locM = raw.match(locPat);
+      if (locM) {
+        company = locM[0].replace(/\s+(北京|上海|广州|深圳|杭州|成都|武汉|南京|西安|厦门|苏州|长沙|天津|重庆|郑州|东莞|合肥|佛山|福州|青岛|大连)[·\-].*$/, "");
+        location = locM[0].match(/(北京|上海|广州|深圳|杭州|成都|武汉|南京|西安|厦门|苏州|长沙|天津|重庆|郑州|东莞|合肥|佛山|福州|青岛|大连)/)[0];
+      }
+
+      // 策略2: 从选择器
+      if (company === "未知") {
+        var cEl = card.querySelector(".company-name, .company-text, [class*='company-name'], .cname");
+        if (cEl) company = (cEl.innerText || cEl.textContent).trim();
+      }
+
+      // 地点兜底
+      if (location === "未知") {
+        var lEl = card.querySelector(".job-area, .area, [class*='area']");
+        var lText = lEl ? (lEl.innerText || lEl.textContent) : "";
+        var cm = lText.match(/北京|上海|广州|深圳|杭州|成都|武汉|南京|西安|厦门|苏州|长沙|天津|重庆|郑州/);
+        if (!cm) cm = raw.match(/北京|上海|广州|深圳|杭州|成都|武汉|南京|西安|厦门/);
         if (cm) location = cm[0];
       }
-      if (location === "未知") {
-        var cm2 = fullText.match(/北京|上海|广州|深圳|杭州|成都|武汉|南京|西安|厦门/);
-        if (cm2) location = cm2[0];
-      }
 
-      // 从卡片提取 JD 摘要（保留原始文本含反爬字符用于AI分析）
-      var jdText = card.innerText || card.textContent;
-      var jd = jdText.length > 500 ? jdText.substring(0, 500) : jdText;
+      // === JD 内容 ===
+      var jd = raw.length > 800 ? raw.substring(0, 800) : raw;
 
+      // === 标签 ===
       var tags = [];
       card.querySelectorAll(".tag-item, .item-tag, [class*='tag']").forEach(function(el) {
-        var t = cleanText(el.innerText || el.textContent);
+        var t = (el.innerText || el.textContent).trim();
         if (t && t.length < 15 && tags.indexOf(t) === -1) tags.push(t);
+      });
+
+      // 从原始文本提取技能标签
+      var techWords = ["Java", "Spring", "SpringBoot", "SpringCloud", "MySQL", "Redis", "Docker", "K8s", "Kubernetes", "Go", "Golang", "Python", "React", "Vue", "TypeScript", "JavaScript", "Node", "Nginx"];
+      techWords.forEach(function(w) {
+        if (raw.indexOf(w) !== -1 && tags.indexOf(w) === -1) tags.push(w);
       });
 
       var rawUrl = href.startsWith("http") ? href : "https://www.zhipin.com" + (href.startsWith("/") ? "" : "/") + href;
@@ -295,10 +319,10 @@ function extractFromListPage() {
         location: location, jdContent: jd,
         tags: tags, rawUrl: rawUrl, source: "platform"
       });
-    } catch (e) {}
+    } catch (e) { console.warn("[JobRadar] card err:", e.message); }
   });
 
-  console.log("[JobRadar] List page: " + jobs.length + " jobs, API cache: " + Object.keys(salaryCache).length + " salaries");
+  console.log("[JobRadar] List: " + jobs.length + " jobs, salaries: " + Object.keys(salaryCache).length);
   return jobs;
 }
 
