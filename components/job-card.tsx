@@ -14,6 +14,7 @@ import {
   Trash2,
   CheckSquare,
   Square,
+  RefreshCw,
 } from "lucide-react";
 import { cn, formatSalary, formatTimeAgo } from "@/lib/utils";
 import { ScoreBadge, RecommendationBadge, SalaryMatchBadge } from "./status-badge";
@@ -25,6 +26,7 @@ interface JobCardProps {
   onToggleFavorite: (jobId: string) => Promise<void>;
   onDelete: (jobId: string) => Promise<void>;
   onTagClick?: (tag: string) => void;
+  onReanalyze?: (jobId: string) => void;
   isFavorited: boolean;
   isSelected?: boolean;
   onToggleSelect?: () => void;
@@ -35,6 +37,7 @@ export function JobCard({
   onToggleFavorite,
   onDelete,
   onTagClick,
+  onReanalyze,
   isFavorited,
   isSelected = false,
   onToggleSelect,
@@ -64,7 +67,6 @@ export function JobCard({
   const handleDelete = useCallback(
     async (e: React.MouseEvent) => {
       e.stopPropagation();
-      if (!confirm("确定删除这个岗位吗？")) return;
       setDeleteLoading(true);
       try {
         await onDelete(job.id);
@@ -146,6 +148,16 @@ export function JobCard({
               )}
             </button>
 
+            {onReanalyze && (
+              <button
+                onClick={(e) => { e.stopPropagation(); onReanalyze(job.id); }}
+                className="rounded-lg p-2 transition-colors text-muted-foreground hover:text-blue-500"
+                aria-label="重新评分"
+                title="重新评分"
+              >
+                <RefreshCw className="h-4 w-4" />
+              </button>
+            )}
             <button
               onClick={handleDelete}
               disabled={deleteLoading}

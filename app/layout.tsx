@@ -13,6 +13,8 @@ export const metadata: Metadata = {
     "个人效率工具 — 岗位信息管理与 AI 智能分析，数据仅存储于本地",
 };
 
+import { ToastProvider } from "@/components/toast";
+
 export default function RootLayout({
   children,
 }: {
@@ -21,7 +23,7 @@ export default function RootLayout({
   return (
     <html lang="zh-CN" className={inter.variable}>
       <body className="min-h-screen bg-background font-sans antialiased">
-        {children}
+        <ToastProvider>{children}</ToastProvider>
       </body>
     </html>
   );

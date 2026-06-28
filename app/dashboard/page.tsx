@@ -1,15 +1,17 @@
 "use client";
 
 import { useState, useCallback, useEffect, useRef } from "react";
-import { Radar, Heart, LayoutDashboard, RefreshCw, Loader2, Trash2, CheckSquare, Square, BarChart3, User, Settings2 } from "lucide-react";
+import { Radar, Heart, LayoutDashboard, RefreshCw, Loader2, Trash2, CheckSquare, Square, BarChart3, User, Settings2, X, ExternalLink } from "lucide-react";
 import Link from "next/link";
-import { cn } from "@/lib/utils";
+import { cn, formatSalary } from "@/lib/utils";
 import { useJobs, useToggleFavorite, type JobData } from "@/lib/hooks/use-jobs";
 import { JobCard } from "@/components/job-card";
 import { FilterBar } from "@/components/filter-bar";
 import { AnalyticsCharts } from "@/components/analytics-charts";
 import { ResumeAnalysis } from "@/components/resume-analysis";
 import { Pagination } from "@/components/pagination";
+import { PageSkeleton, JobCardSkeleton } from "@/components/skeleton";
+import { toast } from "@/components/toast";
 
 export default function Dashboard() {
   const {
@@ -49,8 +51,8 @@ export default function Dashboard() {
       fd.append("file", file);
       const res = await fetch("/api/resume", { method: "POST", body: fd });
       const data = await res.json();
-      if (data.success) setResumeText(data.data.text);
-      else alert("上传失败: " + (data.error || ""));
+      if (data.success) { setResumeText(data.data.text); toast("简历上传成功", "success"); }
+      else toast(data.error || "上传失败", "error");
     } finally {
       setResumeUploading(false);
     }
@@ -67,9 +69,9 @@ export default function Dashboard() {
         body: JSON.stringify({ text }),
       });
       const data = await res.json();
-      if (data.success) setResumeText(data.data.text);
-      else alert("保存失败");
-    } catch { alert("保存失败"); }
+      if (data.success) { setResumeText(data.data.text); toast("简历已保存", "success"); }
+      else toast("保存失败", "error");
+    } catch { toast("保存失败", "error"); }
   }, []);
 
   // 清除简历
@@ -166,8 +168,8 @@ export default function Dashboard() {
 
   const handleBatchDelete = useCallback(async () => {
     if (selectedIds.size === 0) return;
-    if (!confirm(`确定删除选中的 ${selectedIds.size} 个岗位吗？此操作不可撤销。`)) return;
     setBatchDeleting(true);
+    const count = selectedIds.size;
     try {
       const ids = Array.from(selectedIds);
       await fetch("/api/jobs", {
@@ -177,10 +179,37 @@ export default function Dashboard() {
       });
       setSelectedIds(new Set());
       refetch();
+      toast(`已删除 ${count} 个岗位`, "success");
+    } catch {
+      toast("删除失败", "error");
     } finally {
       setBatchDeleting(false);
     }
   }, [selectedIds, refetch]);
+
+  // 单岗位重评
+  const handleReanalyze = useCallback(async (jobId: string) => {
+    toast("已提交重评", "info");
+    await fetch("/api/workers/reanalyze", {
+      method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ jobId }),
+    });
+    setTimeout(refetch, 5000);
+  }, [refetch]);
+
+  // 导出CSV
+  const handleExport = useCallback(() => {
+    window.open("/api/jobs/export", "_blank");
+    toast("正在下载...", "success");
+  }, []);
+
+  // 对比选中
+  const [compareIds, setCompareIds] = useState<string[]>([]);
+  const handleCompare = useCallback(() => {
+    const ids = Array.from(selectedIds).slice(0, 2);
+    if (ids.length < 2) { toast("请至少选择 2 个岗位进行对比", "error"); return; }
+    setCompareIds(ids);
+  }, [selectedIds]);
 
   const handleTagClick = useCallback(
     (tag: string) => {
@@ -267,6 +296,13 @@ export default function Dashboard() {
             {/* Quick Actions */}
             <div className="mt-6 space-y-2">
               <button
+                onClick={handleExport}
+                className="flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground"
+              >
+                <svg className="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+                导出 CSV
+              </button>
+              <button
                 onClick={refetch}
                 className="flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground"
               >
@@ -352,14 +388,69 @@ export default function Dashboard() {
             {/* Non-list views */}
             {viewMode === "resume" && <div className="animate-fade-in"><ResumeAnalysis /></div>}
 
+            {/* Job Comparison Modal */}
+            {compareIds.length === 2 && (
+              <div className="fixed inset-0 bg-black/40 z-50 flex items-center justify-center p-4" onClick={() => setCompareIds([])}>
+                <div className="bg-background rounded-2xl shadow-2xl max-w-4xl w-full max-h-[90vh] overflow-auto p-6" onClick={e => e.stopPropagation()}>
+                  <div className="flex items-center justify-between mb-4">
+                    <h2 className="text-lg font-bold">岗位对比</h2>
+                    <button onClick={() => setCompareIds([])} className="text-muted-foreground hover:text-foreground"><X className="h-5 w-5" /></button>
+                  </div>
+                  <div className="grid grid-cols-2 gap-4">
+                    {compareIds.map(id => {
+                      const job = jobs.find(j => j.id === id);
+                      if (!job) return null;
+                      return (
+                        <div key={id} className="border rounded-xl p-4 space-y-2 text-sm">
+                          <h3 className="font-semibold">{job.title}</h3>
+                          <div className="text-muted-foreground">{job.company} · {job.location}</div>
+                          <div className="text-lg font-bold">{formatSalary(job.salaryMin, job.salaryMax)}</div>
+                          <div className="text-xl font-bold text-primary">{job.aiScore}分</div>
+                          <div className="text-xs text-muted-foreground">{job.aiSummary}</div>
+                          {job.aiTechMatch?.length > 0 && <div className="flex flex-wrap gap-1">{job.aiTechMatch.map(s => <span key={s} className="rounded bg-primary/10 px-2 py-0.5 text-xs">{s}</span>)}</div>}
+                          <a href={job.rawUrl} target="_blank" rel="noopener noreferrer" className="text-xs text-primary hover:underline inline-flex items-center gap-1">查看 <ExternalLink className="h-3 w-3" /></a>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* Salary Trend - Analytics page */}
+            {viewMode === "analytics" && jobs.length > 0 && (() => {
+              const locSal: Record<string, { total: number; count: number }> = {};
+              jobs.forEach(j => {
+                const avg = j.salaryMin && j.salaryMax ? (j.salaryMin + j.salaryMax) / 2 / 1000 : 0;
+                if (avg > 0 && j.location) {
+                  if (!locSal[j.location]) locSal[j.location] = { total: 0, count: 0 };
+                  locSal[j.location].total += avg;
+                  locSal[j.location].count++;
+                }
+              });
+              const data = Object.entries(locSal).map(([k, v]) => ({ name: k, avg: Math.round(v.total / v.count) })).sort((a, b) => b.avg - a.avg).slice(0, 8);
+              return data.length > 0 ? (
+                <div className="mt-6 rounded-xl border bg-card p-5">
+                  <h3 className="text-sm font-semibold mb-3">薪资趋势 (K/月)</h3>
+                  <div className="space-y-2">
+                    {data.map(d => (
+                      <div key={d.name} className="flex items-center gap-3 text-sm">
+                        <span className="w-16 text-right text-muted-foreground">{d.name}</span>
+                        <div className="flex-1 h-6 rounded-full bg-muted overflow-hidden">
+                          <div className="h-full rounded-full bg-primary transition-all flex items-center justify-end px-2" style={{ width: Math.max((d.avg / (data[0]?.avg || 1)) * 100, 5) + "%" }}>
+                            <span className="text-xs text-primary-foreground font-medium">{d.avg}K</span>
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              ) : null;
+            })()}
+
             {viewMode === "analytics" && (
               <div className="animate-fade-in">
-                {loading ? (
-                  <div className="flex items-center justify-center py-20">
-                    <Loader2 className="h-8 w-8 animate-spin text-primary" />
-                    <span className="ml-3 text-muted-foreground">加载数据...</span>
-                  </div>
-                ) : (
+                {loading ? <PageSkeleton /> : (
                   <AnalyticsCharts jobs={jobs} />
                 )}
               </div>
@@ -378,10 +469,7 @@ export default function Dashboard() {
 
             {/* Job List — 分析模式不显示 */}
             {viewMode === "analytics" ? null : loading ? (
-              <div className="flex items-center justify-center py-20">
-                <Loader2 className="h-8 w-8 animate-spin text-primary" />
-                <span className="ml-3 text-muted-foreground">加载岗位数据...</span>
-              </div>
+              <PageSkeleton />
             ) : displayJobs.length === 0 ? (
               /* Empty State */
               <div className="flex flex-col items-center justify-center py-20 text-center">
@@ -430,6 +518,13 @@ export default function Dashboard() {
                       已选 {selectedIds.size} 项
                     </span>
                   )}
+                  {selectedIds.size >= 2 && (
+                    <button onClick={handleCompare}
+                      className="inline-flex items-center gap-1.5 rounded-lg bg-blue-500 px-3 py-1.5 text-xs font-medium text-white hover:bg-blue-600 transition-colors">
+                      <svg className="h-3.5 w-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="3" y="5" width="8" height="14" rx="1"/><rect x="13" y="5" width="8" height="14" rx="1"/></svg>
+                      对比
+                    </button>
+                  )}
                   {selectedIds.size > 0 && (
                     <button
                       onClick={handleBatchDelete}
@@ -454,6 +549,7 @@ export default function Dashboard() {
                       onToggleSelect={() => toggleSelect(job.id)}
                       onToggleFavorite={handleToggleFavorite}
                       onDelete={handleDelete}
+                      onReanalyze={handleReanalyze}
                       onTagClick={handleTagClick}
                       isFavorited={favoritedIds.has(job.id)}
                     />
