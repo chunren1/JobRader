@@ -20,7 +20,7 @@ function buildSystemPrompt(resumeText: string, expectedSalary: string, structure
 ${resumeText || "未上传简历"}${struct}${prefsSection}
 
 ## 期望薪资
-${expectedSalary || "未设置"}
+${expectedSalary && expectedSalary.length > 1 ? expectedSalary : "未特别设置，请根据岗位类型合理判断（如：实习生岗位按市场价，全职按简历经验匹配）"}
 
 ## 分析要求
 
