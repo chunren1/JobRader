@@ -55,7 +55,8 @@ export async function POST(request: NextRequest) {
     } else {
       // PDF: 尝试提取文字
       try {
-        const pdfParse = (await import("pdf-parse")).default;
+        const pdfModule = await import("pdf-parse");
+        const pdfParse: (buf: Buffer) => Promise<{ text: string }> = (pdfModule as any).default || pdfModule;
         const buffer = Buffer.from(await file.arrayBuffer());
         const data = await pdfParse(buffer);
         rawText = data.text;

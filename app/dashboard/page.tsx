@@ -78,7 +78,7 @@ export default function Dashboard() {
   // 自定义偏好（自然语言）
   const [prefsText, setPrefsText] = useState("");
   const [prefsSaving, setPrefsSaving] = useState(false);
-  const prefsTimer = useRef<ReturnType<typeof setTimeout>>(null);
+  const prefsTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
     fetch("/api/preferences").then(r => r.json()).then(d => {
@@ -89,7 +89,7 @@ export default function Dashboard() {
   // 输入后 1 秒自动保存
   const handlePrefsChange = useCallback((val: string) => {
     setPrefsText(val);
-    if (prefsTimer.current) clearTimeout(prefsTimer.current);
+    if (prefsTimer.current !== null) clearTimeout(prefsTimer.current);
     prefsTimer.current = setTimeout(() => {
       setPrefsSaving(true);
       fetch("/api/preferences", { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ text: val }) })

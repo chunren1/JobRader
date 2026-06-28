@@ -1,7 +1,7 @@
 import crypto from "crypto";
 import { prisma } from "@/lib/prisma";
 import { analyzeJob } from "./ai-job-analyzer";
-import { jsonArr, jsonObj } from "@/lib/db-helpers";
+import { jsonArr, jsonObj, parseArr, parseObj } from "@/lib/db-helpers";
 import type { AiAnalysisTask, Job } from "@prisma/client";
 
 const BATCH_SIZE = 5;
@@ -60,10 +60,10 @@ async function processSingleTask(
       score: cachedResult.aiScore,
       summary: cachedResult.aiSummary,
       recommendation: cachedResult.aiRecommendation as "强烈推荐" | "可以考虑" | "不推荐",
-      techStackMatch: cachedResult.aiTechMatch,
-      redFlags: cachedResult.aiRedFlags,
+      techStackMatch: parseArr(cachedResult.aiTechMatch) as string[],
+      redFlags: parseArr(cachedResult.aiRedFlags) as string[],
       salaryMatch: cachedResult.aiSalaryMatch as "低于预期" | "符合预期" | "高于预期",
-      dimensions: cachedResult.aiDimensions as Record<string, number>,
+      dimensions: (typeof cachedResult.aiDimensions === "string" ? parseObj(cachedResult.aiDimensions) : cachedResult.aiDimensions) as Record<string, number>,
     };
 
     await prisma.aiAnalysisCache.update({
@@ -106,8 +106,8 @@ async function processSingleTask(
       aiScore: analysisResult.score,
       aiSummary: analysisResult.summary,
       aiRecommendation: analysisResult.recommendation,
-      aiTechMatch: jsonArr(analysisResult.techStackMatch),
-      aiRedFlags: jsonArr(analysisResult.redFlags),
+      aiTechMatch: jsonArr(analysisResult.techStackMatch as string[]),
+      aiRedFlags: jsonArr(analysisResult.redFlags as string[]),
       aiSalaryMatch: analysisResult.salaryMatch,
       aiDimensions: jsonObj(analysisResult.dimensions as Record<string, unknown>),
       analyzedAt: new Date(),
