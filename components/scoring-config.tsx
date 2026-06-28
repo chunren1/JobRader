@@ -25,12 +25,16 @@ const fieldDescriptions: Record<string, string> = {
 
 export function ScoringConfig() {
   const [fields, setFields] = useState<Field[]>(defaultFields);
+  const [rules, setRules] = useState("");
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
 
   useEffect(() => {
     fetch("/api/scoring").then(r => r.json()).then(d => {
-      if (d.success && d.data?.fields) setFields(d.data.fields);
+      if (d.success) {
+        if (d.data?.fields) setFields(d.data.fields);
+        if (d.data?.rules) setRules(d.data.rules);
+      }
       setLoading(false);
     }).catch(() => setLoading(false));
   }, []);
@@ -65,7 +69,7 @@ export function ScoringConfig() {
   const save = useCallback(async () => {
     setSaving(true);
     try {
-      await fetch("/api/scoring", { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ fields }) });
+      await fetch("/api/scoring", { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ fields, rules }) });
       toast("评分配置已保存，下次分析生效", "success");
     } catch {
       toast("保存失败", "error");
@@ -94,7 +98,21 @@ export function ScoringConfig() {
       </div>
 
       <div className="rounded-lg bg-blue-50 border border-blue-200 p-4 text-xs text-blue-800">
-        <strong>综合分 = Σ(各维度得分 × 权重)</strong>。系统维度按 JD 内容客观评分，自定义维度由你设定标准。如需限制岗位类型（如「只评实习岗」），请使用自定义维度描述筛选条件。
+        <strong>综合分 = Σ(各维度得分 × 权重)</strong>。系统维度按 JD 内容客观评分，自定义维度由你设定标准。
+      </div>
+
+      {/* Scoring Rules */}
+      <div className="rounded-xl border bg-card p-5 space-y-3">
+        <h2 className="text-sm font-semibold text-muted-foreground">评分规则</h2>
+        <p className="text-xs text-muted-foreground">在这里描述你的求职偏好，AI 评分时会严格参照。例如：</p>
+        <textarea
+          value={rules}
+          onChange={e => setRules(e.target.value)}
+          placeholder={"只评实习岗位\n期望薪资3k-8k\n工作地点广州\n不接受外包/驻场\n支持远程办公"}
+          rows={5}
+          className="w-full rounded-lg border px-3 py-2 text-sm focus:outline-none focus:border-primary resize-none"
+        />
+        <p className="text-[10px] text-muted-foreground">每条一行，用自然语言描述。AI 会根据这些规则调整评分结果。</p>
       </div>
 
       {/* System Fields */}

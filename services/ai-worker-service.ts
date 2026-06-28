@@ -46,6 +46,7 @@ async function processSingleTask(
   const structuredResume = resume?.structured ? JSON.parse(resume.structured) : undefined;
   const userPrefsText: string = resume?.preferences?.trim() || "";
   const scoringConfig = resume?.scoringConfig ? JSON.parse(resume.scoringConfig) : null;
+  const scoringRules: string = scoringConfig?.rules || "";
 
   // 1. 尝试命中缓存
   const cachedResult = await prisma.aiAnalysisCache.findUnique({
@@ -76,7 +77,7 @@ async function processSingleTask(
     console.log(`♻️ Cache hit: ${job.title} (hits: ${cachedResult.hitCount + 1})`);
   } else {
     // ❌ 未命中缓存：调用 AI
-    const result = await analyzeJob(job.jdContent, userProfile, resumeText, structuredResume, userPrefsText, scoringConfig);
+    const result = await analyzeJob(job.jdContent, userProfile, resumeText, structuredResume, userPrefsText, scoringConfig, scoringRules);
     if (!result) {
       throw new Error("AI analysis failed — returned null");
     }
