@@ -1,7 +1,7 @@
 "use client";
 
-import { useState, useCallback, useEffect, useRef } from "react";
-import { Radar, Heart, LayoutDashboard, RefreshCw, Loader2, Trash2, CheckSquare, Square, BarChart3, User, Settings2, X, ExternalLink, Sliders } from "lucide-react";
+import { useState, useCallback, useEffect } from "react";
+import { Radar, Heart, LayoutDashboard, RefreshCw, Loader2, Trash2, CheckSquare, Square, BarChart3, User, X, ExternalLink, Sliders } from "lucide-react";
 import Link from "next/link";
 import { cn, formatSalary } from "@/lib/utils";
 import { useJobs, useToggleFavorite, type JobData } from "@/lib/hooks/use-jobs";
@@ -76,28 +76,6 @@ export default function Dashboard() {
   }, []);
 
   // 清除简历
-  // 自定义偏好（自然语言）
-  const [prefsText, setPrefsText] = useState("");
-  const [prefsSaving, setPrefsSaving] = useState(false);
-  const prefsTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
-
-  useEffect(() => {
-    fetch("/api/preferences").then(r => r.json()).then(d => {
-      if (d.success) setPrefsText(d.text || "");
-    }).catch(() => {});
-  }, []);
-
-  // 输入后 1 秒自动保存
-  const handlePrefsChange = useCallback((val: string) => {
-    setPrefsText(val);
-    if (prefsTimer.current !== null) clearTimeout(prefsTimer.current);
-    prefsTimer.current = setTimeout(() => {
-      setPrefsSaving(true);
-      fetch("/api/preferences", { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ text: val }) })
-        .finally(() => setPrefsSaving(false));
-    }, 800);
-  }, []);
-
   const handleClearResume = useCallback(async () => {
     await fetch("/api/resume", { method: "DELETE" }).catch(() => {});
     setResumeText(null);
@@ -346,22 +324,6 @@ export default function Dashboard() {
               {resumeText && (
                 <button onClick={handleClearResume} className="w-full text-left rounded-lg px-3 py-1.5 text-xs text-red-400 hover:bg-red-50 hover:text-red-600 transition-colors">清除简历</button>
               )}
-            </div>
-
-            {/* User Preferences */}
-            <div className="mt-6 space-y-2 px-3">
-              <div className="flex items-center gap-2 text-xs font-semibold text-muted-foreground">
-                <Settings2 className="h-3.5 w-3.5" />求职偏好
-                {prefsSaving && <span className="text-[10px] animate-pulse">保存中...</span>}
-              </div>
-              <textarea
-                value={prefsText}
-                onChange={e => handlePrefsChange(e.target.value)}
-                placeholder="想找什么样的岗位？例如：&#10;广州Java实习岗，不接受加班，远程优先"
-                rows={3}
-                className="w-full rounded-lg border px-3 py-2 text-xs focus:outline-none focus:border-primary resize-none"
-              />
-              <p className="text-[10px] text-muted-foreground">用自然语言描述，AI 会自动理解你的偏好</p>
             </div>
 
           </div>
