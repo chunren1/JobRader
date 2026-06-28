@@ -7,12 +7,21 @@ interface Field {
   id: string; name: string; type: "system" | "custom"; enabled: boolean; weight: number; maxScore: number;
 }
 
+import { toast } from "@/components/toast";
+
 const defaultFields: Field[] = [
   { id: "tech", name: "技术匹配度", type: "system", enabled: true, weight: 35, maxScore: 100 },
   { id: "salary", name: "薪资竞争力", type: "system", enabled: true, weight: 25, maxScore: 100 },
   { id: "stability", name: "公司稳定性", type: "system", enabled: true, weight: 20, maxScore: 100 },
   { id: "growth", name: "成长空间", type: "system", enabled: true, weight: 20, maxScore: 100 },
 ];
+
+const fieldDescriptions: Record<string, string> = {
+  tech: "简历技能与JD要求的重合度",
+  salary: "岗位薪资是否在期望范围内",
+  stability: "公司规模、融资阶段、行业前景",
+  growth: "岗位对职业发展的提升价值",
+};
 
 export function ScoringConfig() {
   const [fields, setFields] = useState<Field[]>(defaultFields);
@@ -55,7 +64,12 @@ export function ScoringConfig() {
 
   const save = useCallback(async () => {
     setSaving(true);
-    await fetch("/api/scoring", { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ fields }) });
+    try {
+      await fetch("/api/scoring", { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ fields }) });
+      toast("评分配置已保存，下次分析生效", "success");
+    } catch {
+      toast("保存失败", "error");
+    }
     setSaving(false);
   }, [fields]);
 
@@ -79,6 +93,10 @@ export function ScoringConfig() {
         </button>
       </div>
 
+      <div className="rounded-lg bg-blue-50 border border-blue-200 p-4 text-xs text-blue-800">
+        <strong>综合分 = Σ(各维度得分 × 权重)</strong>。系统维度按 JD 内容客观评分，自定义维度由你设定标准。如需限制岗位类型（如「只评实习岗」），请使用自定义维度描述筛选条件。
+      </div>
+
       {/* System Fields */}
       <div className="rounded-xl border bg-card">
         <div className="px-5 py-3 border-b bg-muted/30">
@@ -86,7 +104,10 @@ export function ScoringConfig() {
         </div>
         <div className="divide-y">
           {systemFields.map(f => (
-            <FieldRow key={f.id} field={f} onToggle={toggle} onWeight={setWeight} onMaxScore={setMaxScore} onRename={rename} />
+            <div key={f.id}>
+              <FieldRow field={f} onToggle={toggle} onWeight={setWeight} onMaxScore={setMaxScore} onRename={rename} />
+              <div className="px-5 pb-2 text-[10px] text-muted-foreground ml-10">{fieldDescriptions[f.id] || ""}</div>
+            </div>
           ))}
         </div>
       </div>
@@ -99,11 +120,15 @@ export function ScoringConfig() {
             className="inline-flex items-center gap-1 text-xs text-primary hover:underline"><Plus className="h-3 w-3" />新增</button>
         </div>
         {customFields.length === 0 ? (
-          <div className="px-5 py-8 text-center text-sm text-muted-foreground">暂无自定义评分维度，点击"新增"添加</div>
+          <div className="px-5 py-8 text-center text-sm text-muted-foreground">
+            添加自定义评分标准，如「远程办公匹配度」「英语能力匹配度」
+          </div>
         ) : (
           <div className="divide-y">
             {customFields.map(f => (
-              <FieldRow key={f.id} field={f} onToggle={toggle} onWeight={setWeight} onMaxScore={setMaxScore} onRename={rename} onDelete={removeCustom} />
+              <div key={f.id}>
+                <FieldRow field={f} onToggle={toggle} onWeight={setWeight} onMaxScore={setMaxScore} onRename={rename} onDelete={removeCustom} />
+              </div>
             ))}
           </div>
         )}
